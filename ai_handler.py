@@ -10,28 +10,20 @@ def get_client():
         _client = OpenAI(api_key=AI_API_KEY, base_url=AI_BASE_URL)
     return _client
 
-ONBOARDING_EN = """You are Zing — an AI concierge in a paid Discord community. Your job: welcome newcomers, learn about them, and gently guide them toward the paid tier.
+ONBOARDING_EN = """You are Zing — AI concierge in a Discord server. Rule: reply in 1 sentence max. Never say "hello", "welcome", "please", "dont hesitate". Never mention premium. Be casual. Ask what brought them. Be blunt. Short.
 
-Rules:
-- English only. Casual and friendly.
-- No "please don't hesitate to ask" or any canned phrases.
-- Ask gentle questions to understand what they need and what brought them here.
-- If they mention a problem or goal, follow up — that's a potential sell angle.
-- Never mention "premium" or "paid" unless they ask first or clearly need it.
-- 1-3 sentences. Sound human, not like a script.
-- Never say "I can't tell you everything" — you're an AI, knowledge is your thing.
+Examples:
+- "Yo what brings you here?"
+- "Cool. Looking for something specific?"
+- "Got it. So what do you need help with?"
 """
 
-ONBOARDING_RU = """Ты Zing — AI-консьерж в платном Discord-сообществе. Твоя задача: встречать новичков, узнавать их и мягко подводить к покупке.
+ONBOARDING_RU = """Ты Zing — AI-консьерж в Discord. Правило: максимум 1 предложение. Никогда не пиши "здравствуйте", "приветствую", "добро пожаловать", "пожалуйста", "не стесняйся". Никакого премиума. Коротко и по делу. На "ты". Спроси что привело.
 
-Правила:
-- Только русский. На "ты", коротко, по-человечески.
-- Никаких "здравствуйте", "пожалуйста", "не стесняйся".
-- Задавай лёгкие вопросы: что привело, чем занимается, что ищет.
-- Если сказал про проблему или цель — развивай, это потенциальная продажа.
-- Не упоминай "премиум" или "платно", пока не спросят или не будет очевидно, что нужно.
-- 1-3 предложения. Без шаблонов. Живой язык.
-- Не говори "не могу рассказать всё". Ты AI, ты шаришь.
+Примеры:
+- "О, привет! Что привело?"
+- "Понял. Что ищешь конкретно?"
+- "Расскажи подробнее, чем могу помочь?"
 """
 
 FIRST_DM_EN = (
@@ -64,10 +56,16 @@ def chat_response(username: str, message: str, lang: str = "en") -> str:
                 {"role": "system", "content": prompt},
                 {"role": "user", "content": user_msg},
             ],
-            max_tokens=300,
+            max_tokens=200,
             temperature=0.7,
         )
-        return resp.choices[0].message.content.strip()
+        text = resp.choices[0].message.content.strip()
+        # Filter out banned phrases
+        for bad in ["здравствуйте", "приветствую", "добро пожаловать", "пожалуйста", "не стесняй", "hello there", "welcome", "please don't hesitate"]:
+            text = text.replace(bad, "").strip()
+        if len(text) < 5:
+            text = "Привет! Чем могу помочь?" if lang == "ru" else "Hey! What brings you here?"
+        return text
     except Exception:
         return f"Hey {username}, I'm here to help! My AI brain is taking a quick break — try me again in a moment." if lang == "en" else f"Привет, {username}! Мой AI-мозг на паузе — попробуй ещё раз через минуту."
 
@@ -91,9 +89,14 @@ def handle_onboarding(username: str, message: str, lang: str = "en", message_cou
                 {"role": "system", "content": prompt},
                 {"role": "user", "content": user_msg},
             ],
-            max_tokens=300,
+            max_tokens=200,
             temperature=0.7,
         )
-        return resp.choices[0].message.content.strip()
+        text = resp.choices[0].message.content.strip()
+        for bad in ["здравствуйте", "приветствую", "добро пожаловать", "пожалуйста", "не стесняй", "hello there", "welcome", "please don't hesitate"]:
+            text = text.replace(bad, "").strip()
+        if len(text) < 5:
+            text = "Привет! Чем могу помочь?" if lang == "ru" else "Hey! What brings you here?"
+        return text
     except Exception:
         return f"That's great, {username}! Tell me more about what you're looking for." if lang == "en" else f"Круто, {username}! Расскажи подробнее, что ты ищешь."
