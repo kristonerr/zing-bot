@@ -26,8 +26,13 @@ async def on_message(message):
     if message.author.bot:
         return
 
-    # Only respond when mentioned
-    if bot.user in message.mentions:
+    print(f"Got message from {message.author}: {message.clean_content[:60]}")
+
+    # Also respond to "zing" prefix for easier testing
+    is_mentioned = bot.user in message.mentions
+    starts_with_zing = message.content.lower().startswith("zing ")
+
+    if is_mentioned or starts_with_zing:
         content = message.content.lower()
 
         if is_banned(str(message.guild.id), str(message.author.id)):
