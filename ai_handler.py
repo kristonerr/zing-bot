@@ -51,7 +51,7 @@ def get_roast(username: str, lang: str = "en") -> str:
                 {"role": "system", "content": prompt},
                 {"role": "user", "content": user_msg},
             ],
-            max_tokens=80,
+            max_tokens=150,
             temperature=0.9,
         )
         return resp.choices[0].message.content.strip()
@@ -68,7 +68,7 @@ def get_skill_rating(username: str, lang: str = "en") -> str:
                 {"role": "system", "content": prompt},
                 {"role": "user", "content": user_msg},
             ],
-            max_tokens=80,
+            max_tokens=150,
             temperature=0.8,
         )
         return resp.choices[0].message.content.strip()
@@ -85,7 +85,7 @@ def get_joke(lang: str = "en") -> str:
                 {"role": "system", "content": prompt},
                 {"role": "user", "content": user_msg},
             ],
-            max_tokens=60,
+            max_tokens=120,
             temperature=0.9,
         )
         return resp.choices[0].message.content.strip()
@@ -103,7 +103,7 @@ def chat_response(username: str, message: str, lang: str = "en") -> str:
                 {"role": "system", "content": prompt},
                 {"role": "user", "content": user_msg},
             ],
-            max_tokens=100,
+            max_tokens=200,
             temperature=0.8,
         )
         return resp.choices[0].message.content.strip()
