@@ -24,22 +24,25 @@ _user_guilds = {}  # user_id -> guild_id (last seen guild)
 
 @bot.event
 async def on_member_join(member):
-    if member.bot:
-        return
-
-    guild = member.guild
-    lang = get_guild_language(str(guild.id))
-    add_lead(str(guild.id), str(member.id), member.display_name)
-    _user_guilds[str(member.id)] = str(guild.id)
-
     try:
-        first_msg = get_first_dm(lang)
-        await member.send(first_msg)
-        update_lead_stage(str(guild.id), str(member.id), "greeting", f"Sent welcome DM to {member.display_name}")
-    except discord.Forbidden:
-        update_lead_stage(str(guild.id), str(member.id), "dm_blocked", f"Could not DM {member.display_name} — DMs closed")
+        if member.bot:
+            return
+
+        guild = member.guild
+        lang = get_guild_language(str(guild.id))
+        add_lead(str(guild.id), str(member.id), member.display_name)
+        _user_guilds[str(member.id)] = str(guild.id)
+
+        try:
+            first_msg = get_first_dm(lang)
+            await member.send(first_msg)
+            update_lead_stage(str(guild.id), str(member.id), "greeting", f"Sent welcome DM to {member.display_name}")
+        except discord.Forbidden:
+            update_lead_stage(str(guild.id), str(member.id), "dm_blocked", f"Could not DM {member.display_name} — DMs closed")
+        except Exception as e:
+            update_lead_stage(str(guild.id), str(member.id), "error", f"DM error: {e}")
     except Exception as e:
-        update_lead_stage(str(guild.id), str(member.id), "error", f"DM error: {e}")
+        print(f"on_member_join error: {e}")
 
 @bot.event
 async def on_message(message):
@@ -163,9 +166,12 @@ async def on_message(message):
 
 @bot.event
 async def on_ready():
-    init_db()
-    await bot.tree.sync()
-    print(f"{BOT_NAME} is online! Servers: {len(bot.guilds)}")
+    try:
+        init_db()
+        await bot.tree.sync()
+        print(f"{BOT_NAME} is online! Servers: {len(bot.guilds)}")
+    except Exception as e:
+        print(f"on_ready error: {e}")
 
 @bot.tree.command(name="language", description="Switch language / Сменить язык")
 @app_commands.describe(lang="Choose language: en or ru")

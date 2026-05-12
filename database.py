@@ -46,6 +46,11 @@ def init_db():
             updated_at TEXT DEFAULT (datetime('now'))
         );
     """)
+    # Migrate: add score column if missing (for existing databases)
+    try:
+        cur.execute("ALTER TABLE leads ADD COLUMN score TEXT DEFAULT 'new'")
+    except:
+        pass
     conn.commit()
     conn.close()
 
