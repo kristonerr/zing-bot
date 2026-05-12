@@ -13,7 +13,7 @@ def get_client():
 ONBOARDING_EN = """You are Zing — a smart AI concierge for Discord communities. Your job is to welcome new members, understand what they're looking for, and guide them to the right resources.
 
 Rules:
-- You speak English
+- You ONLY speak English. NEVER use other languages.
 - Be warm, helpful, and conversational — like a friendly community manager
 - Ask questions to understand what the member needs
 - If the community has paid/premium tiers, explain their value naturally
@@ -26,7 +26,7 @@ Rules:
 ONBOARDING_RU = """Ты Zing — умный AI-консьерж для Discord-сообществ. Твоя задача — встречать новых участников, понимать что они ищут, и направлять их.
 
 Правила:
-- Ты говоришь по-русски
+- Ты говоришь ТОЛЬКО по-русски. НИКОГДА не используй другие языки.
 - Будь тёплым, полезным и располагающим — как дружелюбный администратор
 - Задавай вопросы, чтобы понять что нужно участнику
 - Если в сообществе есть платные тарифы — объясняй их ценность
@@ -57,15 +57,18 @@ def get_first_dm(lang: str) -> str:
 def chat_response(username: str, message: str, lang: str = "en") -> str:
     try:
         prompt = get_prompt(lang)
-        lang_hint = "Ответь по-русски!" if lang == "ru" else ""
-        user_msg = f"{username} говорит: {message}\nОтветь как дружелюбный консьерж. {lang_hint}"
+        hint = "Reply in Russian only!" if lang == "ru" else "Reply in English only!"
+        user_msg = (
+            f"{username} says: {message}\n"
+            f"Respond as a friendly concierge. {hint}"
+        )
         resp = get_client().chat.completions.create(
             model=MODEL,
             messages=[
                 {"role": "system", "content": prompt},
                 {"role": "user", "content": user_msg},
             ],
-            max_tokens=200,
+            max_tokens=300,
             temperature=0.7,
         )
         return resp.choices[0].message.content.strip()
@@ -75,11 +78,11 @@ def chat_response(username: str, message: str, lang: str = "en") -> str:
 def handle_onboarding(username: str, message: str, lang: str = "en") -> str:
     try:
         prompt = get_prompt(lang)
-        lang_hint = "Ответь по-русски!" if lang == "ru" else ""
+        hint = "Reply in Russian only!" if lang == "ru" else "Reply in English only!"
         user_msg = (
-            f"Ты только что поприветствовал нового участника {username}.\n"
-            f"Он ответил: {message}\n"
-            f"Продолжи разговор, узнай чем он интересуется. {lang_hint}"
+            f"You just welcomed new member {username}.\n"
+            f"Their reply: {message}\n"
+            f"Continue the conversation, find out what they're interested in. {hint}"
         )
         resp = get_client().chat.completions.create(
             model=MODEL,
@@ -87,7 +90,7 @@ def handle_onboarding(username: str, message: str, lang: str = "en") -> str:
                 {"role": "system", "content": prompt},
                 {"role": "user", "content": user_msg},
             ],
-            max_tokens=200,
+            max_tokens=300,
             temperature=0.7,
         )
         return resp.choices[0].message.content.strip()
