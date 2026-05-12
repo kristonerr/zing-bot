@@ -73,7 +73,7 @@ def get_skill_rating(username: str, lang: str = "en") -> str:
         )
         return resp.choices[0].message.content.strip()
     except Exception:
-        return f"{username}? Skill level: yes. And by yes I mean no." if lang == "en" else f"{username}? Уровень навыков: да. Под словом "да" я имею в виду нет."
+        return f"{username}? Skill level: yes. And by yes I mean no." if lang == "en" else f"{username}? Уровень навыков: да. Под словом «да» я имею в виду нет."
 
 def get_joke(lang: str = "en") -> str:
     try:
