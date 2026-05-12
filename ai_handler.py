@@ -1,7 +1,8 @@
 from openai import OpenAI
-from config import OPENAI_API_KEY
+from config import AI_API_KEY, AI_BASE_URL, AI_MODEL
 
-client = OpenAI(api_key=OPENAI_API_KEY)
+client = OpenAI(api_key=AI_API_KEY, base_url=AI_BASE_URL)
+MODEL = AI_MODEL
 
 SYSTEM_PROMPT = """You are Zing — a Discord bot with a sharp tongue and no filter.
 You roast people, but you're funny not mean. You know where the line is.
@@ -35,7 +36,7 @@ Zing: That take is so cold it could cool down my GPU. -5/10.
 def get_roast(username: str) -> str:
     try:
         resp = client.chat.completions.create(
-            model="gpt-4o-mini",
+            model=MODEL,
             messages=[
                 {"role": "system", "content": SYSTEM_PROMPT},
                 {"role": "user", "content": f"Roast {username} hard but funny."},
@@ -50,7 +51,7 @@ def get_roast(username: str) -> str:
 def get_skill_rating(username: str) -> str:
     try:
         resp = client.chat.completions.create(
-            model="gpt-4o-mini",
+            model=MODEL,
             messages=[
                 {"role": "system", "content": SYSTEM_PROMPT},
                 {"role": "user", "content": f"Rate {username}'s skill level 1-10 and explain why."},
@@ -65,7 +66,7 @@ def get_skill_rating(username: str) -> str:
 def get_joke() -> str:
     try:
         resp = client.chat.completions.create(
-            model="gpt-4o-mini",
+            model=MODEL,
             messages=[
                 {"role": "system", "content": SYSTEM_PROMPT},
                 {"role": "user", "content": "Tell me a dark humor one-liner."},
@@ -80,7 +81,7 @@ def get_joke() -> str:
 def chat_response(username: str, message: str) -> str:
     try:
         resp = client.chat.completions.create(
-            model="gpt-4o-mini",
+            model=MODEL,
             messages=[
                 {"role": "system", "content": SYSTEM_PROMPT},
                 {"role": "user", "content": f"{username} says: {message}\nRespond as Zing."},
