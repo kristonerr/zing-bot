@@ -3,7 +3,7 @@ import asyncio
 import time
 from discord import app_commands
 from discord.ext import commands
-from database import init_db, is_banned, is_premium_guild, get_guild_language, set_guild_language, add_lead, update_lead_stage, update_lead_interest, get_leads
+from database import init_db, is_banned, is_premium_guild, get_guild_language, set_guild_language, add_lead, update_lead_stage, update_lead_interest, update_lead_score, get_lead, get_leads
 from ai_handler import chat_response, handle_onboarding, get_first_dm
 from config import BOT_NAME
 
@@ -18,6 +18,9 @@ bot = commands.Bot(
 )
 
 _cooldowns = {}
+_processed_messages = set()
+_dm_counts = {}
+_user_guilds = {}  # user_id -> guild_id (last seen guild)
 
 @bot.event
 async def on_member_join(member):
@@ -27,6 +30,7 @@ async def on_member_join(member):
     guild = member.guild
     lang = get_guild_language(str(guild.id))
     add_lead(str(guild.id), str(member.id), member.display_name)
+    _user_guilds[str(member.id)] = str(guild.id)
 
     try:
         first_msg = get_first_dm(lang)
@@ -42,10 +46,41 @@ async def on_message(message):
     if message.author.bot:
         return
 
+    msg_id = message.id
+    if msg_id in _processed_messages:
+        return
+    _processed_messages.add(msg_id)
+    if len(_processed_messages) > 1000:
+        _processed_messages.clear()
+
     if isinstance(message.channel, discord.DMChannel):
-        lang = "ru"  # default for DMs
-        reply = handle_onboarding(message.author.display_name, message.clean_content, lang)
+        user_id = str(message.author.id)
+        now = time.time()
+        if user_id in _cooldowns and now - _cooldowns[user_id] < 2:
+            return
+        _cooldowns[user_id] = now
+
+        guild_id = _user_guilds.get(user_id)
+        if not guild_id:
+            await message.channel.send("Hey! Which server are you from? I need to know to help you better.")
+            return
+
+        content_lower = message.clean_content.lower()
+        if "english" in content_lower or "i speak english" in content_lower:
+            lang = "en"
+        else:
+            lang = "ru"
+
+        _dm_counts[user_id] = _dm_counts.get(user_id, 0) + 1
+        count = _dm_counts[user_id]
+
+        reply = handle_onboarding(message.author.display_name, message.clean_content, lang, count)
         await message.channel.send(reply)
+
+        if count == 1:
+            update_lead_stage(guild_id, user_id, "chatting", f"Reply: {message.clean_content[:50]}")
+        elif count >= 5:
+            update_lead_stage(guild_id, user_id, "engaged", f"Active conversation ({count} msgs)")
         return
 
     lang = get_guild_language(str(message.guild.id))
@@ -74,6 +109,8 @@ async def on_message(message):
 
         if "test" in content and "onboard" in content:
             first_msg = get_first_dm(lang)
+            add_lead(str(message.guild.id), str(message.author.id), message.author.display_name)
+            _user_guilds[str(message.author.id)] = str(message.guild.id)
             await message.reply(f"**Simulating new member join...**\n\n{first_msg}")
             return
 
@@ -107,13 +144,15 @@ async def on_message(message):
                     for row in rows:
                         stage = row["stage"]
                         interest = row["interest"] or "—"
-                        desc += f"• **{row['username']}** — {stage}" + (f" | Interest: {interest}" if interest != "—" else "") + "\n"
+                        score = row["score"] or "—"
+                        desc += f"• **{row['username']}** [{score}] — {stage}" + (f" | {interest}" if interest != "—" else "") + "\n"
                     await message.reply(desc)
             else:
                 await message.reply("Only admins can view leads." if lang == "en" else "Только админы могут смотреть лиды.")
             return
 
         user_id = str(message.author.id)
+        _user_guilds[user_id] = str(message.guild.id)
         now = time.time()
         if user_id in _cooldowns and now - _cooldowns[user_id] < 3:
             return
@@ -152,7 +191,8 @@ async def leads(interaction: discord.Interaction):
     for row in rows:
         stage = row["stage"]
         interest = row["interest"] or "—"
-        desc += f"• **{row['username']}** — {stage}" + (f" | {interest}" if row["interest"] else "") + "\n"
+        score = row["score"] or "—"
+        desc += f"• **{row['username']}** [{score}] — {stage}" + (f" | {interest}" if row["interest"] else "") + "\n"
     await interaction.response.send_message(desc, ephemeral=True)
 
 @bot.tree.command(name="premium", description="Check premium status")
@@ -167,5 +207,4 @@ async def premium(interaction: discord.Interaction):
 async def stats(interaction: discord.Interaction):
     await interaction.response.send_message(f"Zing is running on {len(bot.guilds)} servers, helping communities grow! 🚀", ephemeral=True)
 
-def run_bot():
-    pass
+

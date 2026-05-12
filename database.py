@@ -41,6 +41,7 @@ def init_db():
             interest TEXT,
             email TEXT,
             converted INTEGER DEFAULT 0,
+            score TEXT DEFAULT 'new',
             notes TEXT,
             updated_at TEXT DEFAULT (datetime('now'))
         );
@@ -136,6 +137,24 @@ def update_lead_interest(guild_id: str, user_id: str, interest: str):
     )
     conn.commit()
     conn.close()
+
+def update_lead_score(guild_id: str, user_id: str, score: str):
+    conn = get_db()
+    conn.execute(
+        "UPDATE leads SET score = ?, updated_at = datetime('now') WHERE guild_id = ? AND user_id = ?",
+        (score, guild_id, user_id),
+    )
+    conn.commit()
+    conn.close()
+
+def get_lead(guild_id: str, user_id: str):
+    conn = get_db()
+    row = conn.execute(
+        "SELECT * FROM leads WHERE guild_id = ? AND user_id = ?",
+        (guild_id, user_id),
+    ).fetchone()
+    conn.close()
+    return row
 
 def get_leads(guild_id: str, limit: int = 20):
     conn = get_db()
