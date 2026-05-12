@@ -15,6 +15,7 @@ def init_db():
     cur.executescript("""
         CREATE TABLE IF NOT EXISTS guilds (
             guild_id TEXT PRIMARY KEY,
+            language TEXT DEFAULT 'en',
             premium_until TEXT,
             created_at TEXT DEFAULT (datetime('now'))
         );
@@ -61,6 +62,26 @@ def increment_roast(user_id: str):
         "INSERT INTO users (user_id, roast_count) VALUES (?, 1) "
         "ON CONFLICT(user_id) DO UPDATE SET roast_count = roast_count + 1",
         (user_id,),
+    )
+    conn.commit()
+    conn.close()
+
+def get_guild_language(guild_id: str) -> str:
+    conn = get_db()
+    row = conn.execute(
+        "SELECT language FROM guilds WHERE guild_id = ?", (guild_id,)
+    ).fetchone()
+    conn.close()
+    if row:
+        return row["language"]
+    return "en"
+
+def set_guild_language(guild_id: str, lang: str):
+    conn = get_db()
+    conn.execute(
+        "INSERT INTO guilds (guild_id, language) VALUES (?, ?) "
+        "ON CONFLICT(guild_id) DO UPDATE SET language = excluded.language",
+        (guild_id, lang),
     )
     conn.commit()
     conn.close()
