@@ -175,6 +175,22 @@ async def on_message(message):
             else:
                 await message.reply(f"Current language: **{lang.upper()}**. Use `Zing language ru` or `Zing language en` to switch.")
 
+        elif "poll" in content and "|" in content:
+            parts = [p.strip() for p in message.clean_content.split("|")]
+            if len(parts) >= 3:
+                question = parts[0].replace("@Zing", "").replace("zing", "").replace("poll", "").strip()
+                options = parts[1:]
+                numbs = ["1️⃣","2️⃣","3️⃣","4️⃣","5️⃣","6️⃣","7️⃣","8️⃣","9️⃣","🔟"]
+                embed = discord.Embed(title=f"📊 {question}", color=discord.Color.orange())
+                for i, opt in enumerate(options[:10]):
+                    embed.add_field(name=f"{numbs[i]} {opt}", value="\u200b", inline=False)
+                embed.set_footer(text="Zing says: All options are bad, but you do you" if lang == "en" else "Zing says: Все варианты унылые, но выбирай")
+                msg = await message.reply(embed=embed)
+                for i in range(min(len(options), 10)):
+                    await msg.add_reaction(numbs[i])
+            else:
+                await message.reply("Usage: `@Zing poll | Question | Option1 | Option2 | ...`" if lang == "en" else "Использование: `@Zing poll | Вопрос | Вариант1 | Вариант2 | ...`")
+
         elif "top" in content or "leaderboard" in content:
             conn = get_db()
             rows = conn.execute(
@@ -200,6 +216,7 @@ async def on_message(message):
                 "`@Zing joke` — Dark humor\n"
                 "`@Zing guess` — Start guessing game\n"
                 "`@Zing is @user` — Make a guess\n"
+                "`@Zing poll | Q | A | B | C` — Create a poll\n"
                 "`@Zing top` — Roast leaderboard\n"
                 "`@Zing language ru/en` — Switch language\n"
                 "`/language` — Switch language (slash)\n"
@@ -214,6 +231,7 @@ async def on_message(message):
                 "`@Zing joke` — Чёрная юмореска\n"
                 "`@Zing guess` — Начать игру «Угадай кто»\n"
                 "`@Zing is @user` — Сделать предположение\n"
+                "`@Zing poll | Вопрос | А | Б | В` — Создать опрос\n"
                 "`@Zing top` — Топ зажаренных\n"
                 "`@Zing language ru/en` — Сменить язык\n"
                 "`/language` — Сменить язык (слэш)\n"
