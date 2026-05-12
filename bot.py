@@ -72,26 +72,27 @@ async def on_message(message):
                 await message.reply(f"Current language: **{lang.upper()}**. Use `@Zing language ru` or `@Zing language en` to switch.")
             return
 
+        if "test" in content and "onboard" in content:
+            first_msg = get_first_dm(lang)
+            await message.reply(f"**Simulating new member join...**\n\n{first_msg}")
+            return
+
         if "help" in content:
             help_en = (
                 f"**👋 {BOT_NAME} — AI Concierge**\n\n"
                 "Just **@mention me** or start a message with `zing ` and I'll help!\n\n"
-                "`@Zing` — Ask me anything, I'm here to help\n"
+                "`@Zing` — Ask me anything\n"
                 "`@Zing language ru/en` — Switch language\n"
-                "`/language` — Switch language (slash command)\n"
-                "`/leads` — View recent leads (admin only)\n"
-                "`/premium` — Check premium status\n"
-                "`/stats` — Bot stats"
+                "`@Zing test onboard` — Simulate new member join\n"
+                "`/leads` — View recent leads (admin only)"
             )
             help_ru = (
                 f"**👋 {BOT_NAME} — AI-консьерж**\n\n"
                 "Просто **упомяни меня** или начни сообщение с `zing ` и я помогу!\n\n"
-                "`@Zing` — Спроси что угодно, я здесь чтобы помочь\n"
+                "`@Zing` — Спроси что угодно\n"
                 "`@Zing language ru/en` — Сменить язык\n"
-                "`/language` — Сменить язык (слэш-команда)\n"
-                "`/leads` — Просмотр лидов (только админы)\n"
-                "`/premium` — Статус премиума\n"
-                "`/stats` — Статистика бота"
+                "`@Zing test onboard` — Тест приветствия новичка\n"
+                "`/leads` — Просмотр лидов (только админы)"
             )
             await message.reply(help_ru if lang == "ru" else help_en)
             return
