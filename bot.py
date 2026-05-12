@@ -1,4 +1,5 @@
 import discord
+from discord import app_commands
 from discord.ext import commands
 from database import init_db, increment_roast, is_banned, is_premium_guild
 from ai_handler import get_roast, get_skill_rating, get_joke, chat_response
@@ -17,6 +18,7 @@ bot = commands.Bot(
 @bot.event
 async def on_ready():
     init_db()
+    await bot.tree.sync()
     print(f"{BOT_NAME} is online! Servers: {len(bot.guilds)}")
 
 @bot.event
@@ -79,16 +81,16 @@ def get_help_embed():
     embed.set_footer(text="Premium: $5/mo — unroastable + more commands")
     return embed
 
-@bot.slash_command(name="premium", description="Check premium status")
-async def premium(ctx):
-    if is_premium_guild(str(ctx.guild_id)):
-        await ctx.respond("This server is premium. Fancy.", ephemeral=True)
+@bot.tree.command(name="premium", description="Check premium status")
+async def premium(interaction: discord.Interaction):
+    if is_premium_guild(str(interaction.guild_id)):
+        await interaction.response.send_message("This server is premium. Fancy.", ephemeral=True)
     else:
-        await ctx.respond("Free tier, huh? Tell your admin to stop being cheap.", ephemeral=True)
+        await interaction.response.send_message("Free tier, huh? Tell your admin to stop being cheap.", ephemeral=True)
 
-@bot.slash_command(name="stats", description="Show Zing server stats")
-async def stats(ctx):
-    await ctx.respond(f"Zing is running on {len(bot.guilds)} servers. All of them regret it.", ephemeral=True)
+@bot.tree.command(name="stats", description="Show Zing server stats")
+async def stats(interaction: discord.Interaction):
+    await interaction.response.send_message(f"Zing is running on {len(bot.guilds)} servers. All of them regret it.", ephemeral=True)
 
 def run_bot():
     bot.run(DISCORD_TOKEN)
