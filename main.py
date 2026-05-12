@@ -7,7 +7,7 @@ class HealthHandler(BaseHTTPRequestHandler):
     def do_GET(self):
         self.send_response(200)
         self.end_headers()
-        self.wfile.write(b"Zing is alive!")
+        self.wfile.write(b"Zing AI Concierge is running!")
 
 def start_http():
     port = int(os.getenv("PORT", 10000))

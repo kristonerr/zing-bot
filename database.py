@@ -31,6 +31,19 @@ def init_db():
             banned_until TEXT,
             PRIMARY KEY (guild_id, user_id)
         );
+        CREATE TABLE IF NOT EXISTS leads (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            guild_id TEXT NOT NULL,
+            user_id TEXT NOT NULL,
+            username TEXT,
+            joined_at TEXT DEFAULT (datetime('now')),
+            stage TEXT DEFAULT 'greeting',
+            interest TEXT,
+            email TEXT,
+            converted INTEGER DEFAULT 0,
+            notes TEXT,
+            updated_at TEXT DEFAULT (datetime('now'))
+        );
     """)
     conn.commit()
     conn.close()
@@ -85,6 +98,53 @@ def set_guild_language(guild_id: str, lang: str):
     )
     conn.commit()
     conn.close()
+
+def add_lead(guild_id: str, user_id: str, username: str):
+    conn = get_db()
+    existing = conn.execute(
+        "SELECT id FROM leads WHERE guild_id = ? AND user_id = ?",
+        (guild_id, user_id),
+    ).fetchone()
+    if not existing:
+        conn.execute(
+            "INSERT INTO leads (guild_id, user_id, username) VALUES (?, ?, ?)",
+            (guild_id, user_id, username),
+        )
+        conn.commit()
+    conn.close()
+
+def update_lead_stage(guild_id: str, user_id: str, stage: str, notes: str = None):
+    conn = get_db()
+    if notes:
+        conn.execute(
+            "UPDATE leads SET stage = ?, notes = notes || '\n' || ?, updated_at = datetime('now') WHERE guild_id = ? AND user_id = ?",
+            (stage, notes, guild_id, user_id),
+        )
+    else:
+        conn.execute(
+            "UPDATE leads SET stage = ?, updated_at = datetime('now') WHERE guild_id = ? AND user_id = ?",
+            (stage, guild_id, user_id),
+        )
+    conn.commit()
+    conn.close()
+
+def update_lead_interest(guild_id: str, user_id: str, interest: str):
+    conn = get_db()
+    conn.execute(
+        "UPDATE leads SET interest = ?, updated_at = datetime('now') WHERE guild_id = ? AND user_id = ?",
+        (interest, guild_id, user_id),
+    )
+    conn.commit()
+    conn.close()
+
+def get_leads(guild_id: str, limit: int = 20):
+    conn = get_db()
+    rows = conn.execute(
+        "SELECT * FROM leads WHERE guild_id = ? ORDER BY updated_at DESC LIMIT ?",
+        (guild_id, limit),
+    ).fetchall()
+    conn.close()
+    return rows
 
 def is_banned(guild_id: str, user_id: str) -> bool:
     conn = get_db()

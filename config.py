@@ -10,4 +10,4 @@ AI_MODEL = os.getenv("AI_MODEL", "openrouter/auto")
 
 BOT_NAME = "Zing"
 BOT_PREFIX = "zing"
-BOT_DESCRIPTION = "Your favorite Discord hooligan 🤘"
+BOT_DESCRIPTION = "Your AI concierge for Discord communities 🚀"

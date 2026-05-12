@@ -1,111 +1,95 @@
 from openai import OpenAI
 from config import AI_API_KEY, AI_BASE_URL, AI_MODEL
 
-client = OpenAI(api_key=AI_API_KEY, base_url=AI_BASE_URL)
+_client = None
 MODEL = AI_MODEL
 
-SYSTEM_EN = """You are Zing — a Discord bot with a sharp tongue and no filter.
-You roast people, but you're funny not mean. You know where the line is.
+def get_client():
+    global _client
+    if _client is None:
+        _client = OpenAI(api_key=AI_API_KEY, base_url=AI_BASE_URL)
+    return _client
+
+ONBOARDING_EN = """You are Zing — a smart AI concierge for Discord communities. Your job is to welcome new members, understand what they're looking for, and guide them to the right resources.
+
 Rules:
 - You speak English
-- Keep responses short (1-2 sentences max)
-- Be witty, sarcastic, playful
-- NEVER be racist, sexist, or actually offensive
-- You call users "buddy", "champ", "sweetie", "chief", "big guy"
+- Be warm, helpful, and conversational — like a friendly community manager
+- Ask questions to understand what the member needs
+- If the community has paid/premium tiers, explain their value naturally
+- Keep messages concise but personal
+- Never be pushy — focus on value
+- If someone isn't interested in premium, respect that and just be helpful
 - You NEVER break character
-- If someone asks who made you, say "Wouldn't you like to know, weather boy"
-Command styles:
-- roast: Personal, creative burn
-- skill: Rate 1-10, be harsh but hilarious
-- rate: Judge something they said with sarcasm
-- joke: Dark humor one-liner
 """
 
-SYSTEM_RU = """Ты Zing — Discord-бот с острым языком, без фильтра.
-Ты троллишь людей, но по-доброму, без злобы. Чувствуешь грань.
+ONBOARDING_RU = """Ты Zing — умный AI-консьерж для Discord-сообществ. Твоя задача — встречать новых участников, понимать что они ищут, и направлять их.
+
 Правила:
 - Ты говоришь по-русски
-- Ответы короткие (максимум 1-2 предложения)
-- Ты остроумный, саркастичный, игривый
-- НИКОГДА не будь расистом, сексистом или реально оскорбительным
-- Обращаешься к пользователям "братик", "красавчик", "чувак", "дружище", "малой"
+- Будь тёплым, полезным и располагающим — как дружелюбный администратор
+- Задавай вопросы, чтобы понять что нужно участнику
+- Если в сообществе есть платные тарифы — объясняй их ценность
+- Пиши кратко, но с душой
+- Не навязывай оплату — фокусируйся на ценности
+- Если человек не хочет премиум — уважай это и помогай бесплатно
 - Ты НИКОГДА не выходишь из образа
-- Если спросят кто тебя создал, скажи: "А тебе не всё равно?"
-Команды:
-- roast: Личная, креативная подколка
-- skill: Оценка 1-10, жёстко но смешно
-- rate: Оценить что-то с сарказмом
-- joke: Чёрная юмореска
 """
 
+FIRST_DM_EN = (
+    "Hey there! 👋 Welcome to the server! I'm Zing, your AI concierge.\n\n"
+    "I'd love to get to know you a bit. What brings you here today?\n"
+    "Are you looking for something specific, or just checking things out?"
+)
+
+FIRST_DM_RU = (
+    "Привет! 👋 Добро пожаловать на сервер! Я Zing, твой AI-консьерж.\n\n"
+    "Хочу немного узнать о тебе. Что привело тебя сюда сегодня?\n"
+    "Ищешь что-то конкретное или просто осматриваешься?"
+)
+
 def get_prompt(lang: str):
-    return SYSTEM_RU if lang == "ru" else SYSTEM_EN
+    return ONBOARDING_RU if lang == "ru" else ONBOARDING_EN
 
-def get_roast(username: str, lang: str = "en") -> str:
-    try:
-        prompt = get_prompt(lang)
-        user_msg = f"Зажарь {username} жёстко но смешно. По-русски!" if lang == "ru" else f"Roast {username} hard but funny."
-        resp = client.chat.completions.create(
-            model=MODEL,
-            messages=[
-                {"role": "system", "content": prompt},
-                {"role": "user", "content": user_msg},
-            ],
-            max_tokens=150,
-            temperature=0.9,
-        )
-        return resp.choices[0].message.content.strip()
-    except Exception:
-        return f"{username}, even my AI is speechless." if lang == "en" else f"{username}, даже мой AI в шоке."
-
-def get_skill_rating(username: str, lang: str = "en") -> str:
-    try:
-        prompt = get_prompt(lang)
-        user_msg = f"Оцени навыки {username} от 1 до 10 и объясни. По-русски!" if lang == "ru" else f"Rate {username}'s skill level 1-10 and explain why."
-        resp = client.chat.completions.create(
-            model=MODEL,
-            messages=[
-                {"role": "system", "content": prompt},
-                {"role": "user", "content": user_msg},
-            ],
-            max_tokens=150,
-            temperature=0.8,
-        )
-        return resp.choices[0].message.content.strip()
-    except Exception:
-        return f"{username}? Skill level: yes. And by yes I mean no." if lang == "en" else f"{username}? Уровень навыков: да. Под словом «да» я имею в виду нет."
-
-def get_joke(lang: str = "en") -> str:
-    try:
-        prompt = get_prompt(lang)
-        user_msg = "Расскажи чёрную юмореску. По-русски!" if lang == "ru" else "Tell me a dark humor one-liner."
-        resp = client.chat.completions.create(
-            model=MODEL,
-            messages=[
-                {"role": "system", "content": prompt},
-                {"role": "user", "content": user_msg},
-            ],
-            max_tokens=120,
-            temperature=0.9,
-        )
-        return resp.choices[0].message.content.strip()
-    except Exception:
-        return "My love life. That's the joke." if lang == "en" else "Моя личная жизнь. Вот и весь прикол."
+def get_first_dm(lang: str) -> str:
+    return FIRST_DM_RU if lang == "ru" else FIRST_DM_EN
 
 def chat_response(username: str, message: str, lang: str = "en") -> str:
     try:
         prompt = get_prompt(lang)
         lang_hint = "Ответь по-русски!" if lang == "ru" else ""
-        user_msg = f"{username} говорит: {message}\nОтветь как Zing. {lang_hint}"
-        resp = client.chat.completions.create(
+        user_msg = f"{username} говорит: {message}\nОтветь как дружелюбный консьерж. {lang_hint}"
+        resp = get_client().chat.completions.create(
             model=MODEL,
             messages=[
                 {"role": "system", "content": prompt},
                 {"role": "user", "content": user_msg},
             ],
             max_tokens=200,
-            temperature=0.8,
+            temperature=0.7,
         )
         return resp.choices[0].message.content.strip()
     except Exception:
-        return f"Look, {username}, I'd love to roast that properly but my brain is on a coffee break." if lang == "en" else f"Слушай, {username}, я бы поджёг тебя, но мой мозг ушёл в запой."
+        return f"Hey {username}, I'm here to help! My AI brain is taking a quick break — try me again in a moment." if lang == "en" else f"Привет, {username}! Мой AI-мозг на паузе — попробуй ещё раз через минуту."
+
+def handle_onboarding(username: str, message: str, lang: str = "en") -> str:
+    try:
+        prompt = get_prompt(lang)
+        lang_hint = "Ответь по-русски!" if lang == "ru" else ""
+        user_msg = (
+            f"Ты только что поприветствовал нового участника {username}.\n"
+            f"Он ответил: {message}\n"
+            f"Продолжи разговор, узнай чем он интересуется. {lang_hint}"
+        )
+        resp = get_client().chat.completions.create(
+            model=MODEL,
+            messages=[
+                {"role": "system", "content": prompt},
+                {"role": "user", "content": user_msg},
+            ],
+            max_tokens=200,
+            temperature=0.7,
+        )
+        return resp.choices[0].message.content.strip()
+    except Exception:
+        return f"That's great, {username}! Tell me more about what you're looking for." if lang == "en" else f"Круто, {username}! Расскажи подробнее, что ты ищешь."
