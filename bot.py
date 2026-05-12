@@ -66,6 +66,16 @@ async def on_message(message):
             joke = get_joke(lang)
             await message.reply(joke)
 
+        elif "language" in content or "язык" in content:
+            if "ru" in content or "рус" in content:
+                set_guild_language(str(message.guild.id), "ru")
+                await message.reply("Язык переключён на русский! Теперь буду троллить по-нашему 😏")
+            elif "en" in content or "англ" in content:
+                set_guild_language(str(message.guild.id), "en")
+                await message.reply("Language set to English! Now I roast in English. Boring.")
+            else:
+                await message.reply(f"Current language: **{lang.upper()}**. Use `Zing language ru` or `Zing language en` to switch.")
+
         elif "help" in content:
             await message.reply(embed=get_help_embed(lang))
 
