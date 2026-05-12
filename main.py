@@ -6,8 +6,14 @@ from bot import bot
 class HealthHandler(BaseHTTPRequestHandler):
     def do_GET(self):
         self.send_response(200)
+        self.send_header("Content-Type", "text/plain")
         self.end_headers()
         self.wfile.write(b"Zing AI Concierge is running!")
+
+    def do_HEAD(self):
+        self.send_response(200)
+        self.send_header("Content-Type", "text/plain")
+        self.end_headers()
 
 def start_http():
     port = int(os.getenv("PORT", 10000))
