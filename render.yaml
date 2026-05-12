@@ -1,4 +1,3 @@
 runtime: python
 startCommand: python main.py
 buildCommand: pip install -r requirements.txt
-port: 10000

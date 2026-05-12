@@ -1,25 +1,22 @@
-import asyncio
 import os
-from aiohttp import web
-from bot import run_bot, bot
+import threading
+from http.server import HTTPServer, BaseHTTPRequestHandler
+from bot import bot
 
-async def health_check(request):
-    return web.Response(text="Zing is alive 🤘")
+class HealthHandler(BaseHTTPRequestHandler):
+    def do_GET(self):
+        self.send_response(200)
+        self.end_headers()
+        self.wfile.write(b"Zing is alive!")
 
-async def start_web():
-    app = web.Application()
-    app.router.add_get("/", health_check)
+def start_http():
     port = int(os.getenv("PORT", 10000))
-    runner = web.AppRunner(app)
-    await runner.setup()
-    site = web.TCPSite(runner, "0.0.0.0", port)
-    await site.start()
-    print(f"Health server running on port {port}")
-
-async def start_all():
-    await start_web()
-    await bot.start(os.getenv("DISCORD_TOKEN"))
+    server = HTTPServer(("0.0.0.0", port), HealthHandler)
+    print(f"Health server on port {port}")
+    server.serve_forever()
 
 if __name__ == "__main__":
-    print("Starting Zing... 🤘")
-    asyncio.run(start_all())
+    print("Starting Zing...")
+    t = threading.Thread(target=start_http, daemon=True)
+    t.start()
+    bot.run(os.getenv("DISCORD_TOKEN"))
