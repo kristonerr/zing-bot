@@ -1,8 +1,11 @@
 import discord
+import random
+import asyncio
 from discord import app_commands
 from discord.ext import commands
-from database import init_db, increment_roast, is_banned, is_premium_guild, get_guild_language, set_guild_language
+from database import init_db, increment_roast, is_banned, is_premium_guild, get_guild_language, set_guild_language, get_db
 from ai_handler import get_roast, get_skill_rating, get_joke, chat_response
+from features import should_react_randomly, get_random_reaction, check_smart_troll, guess_game
 from config import BOT_NAME
 
 intents = discord.Intents.default()
@@ -15,52 +18,135 @@ bot = commands.Bot(
     description="Your favorite Discord hooligan 🤘",
 )
 
+PROVOCATIONS_EN = [
+    "This server is way too quiet. Someone want to get roasted? 🔥",
+    "I'm bored. Entertain me or I'll start roasting random people.",
+    "Hey @everyone, your friendly neighborhood hooligan is here. Who's first?",
+    "I can hear you lurking. Come out and get roasted like a man.",
+    "This chat is giving 'nobody likes me' vibes. Prove me wrong.",
+    "Fun fact: you're all below average. Don't believe me? Try @Zing skill",
+]
+PROVOCATIONS_RU = [
+    "Сервер слишком тихий. Кто-то хочет быть поджаренным? 🔥",
+    "Мне скучно. Развлекайте меня или я начну троллить рандомных людей.",
+    "Эй @everyone, ваш любимый хулиган здесь. Кто первый?",
+    "Я чую вас там, в луркинге. Выходите и получите как мужики.",
+    "Этот чат излучает энергетику 'меня никто не любит'. Докажите обратное.",
+    "Факт: вы все ниже среднего. Не верите? Попробуйте @Zing skill",
+]
+
+async def provocator_task():
+    await bot.wait_until_ready()
+    while True:
+        await asyncio.sleep(random.randint(3600, 7200))
+        for guild in bot.guilds:
+            lang = get_guild_language(str(guild.id))
+            if random.random() > 0.5:
+                continue
+            for channel in guild.text_channels:
+                if channel.permissions_for(guild.me).send_messages:
+                    msg = random.choice(PROVOCATIONS_RU if lang == "ru" else PROVOCATIONS_EN)
+                    try:
+                        await channel.send(msg)
+                    except:
+                        pass
+                    break
+
 @bot.event
 async def on_ready():
     init_db()
     await bot.tree.sync()
     print(f"{BOT_NAME} is online! Servers: {len(bot.guilds)}")
+    bot.loop.create_task(provocator_task())
 
 @bot.event
 async def on_message(message):
     if message.author.bot:
         return
 
-    print(f"Got message from {message.author}: {message.clean_content[:60]}")
+    lang = get_guild_language(str(message.guild.id))
 
-    # Also respond to "zing" prefix for easier testing
+    # Random reactions (10% chance)
+    if should_react_randomly():
+        try:
+            await message.add_reaction(get_random_reaction())
+        except:
+            pass
+
+    # Smart trolling
+    troll = check_smart_troll(message.content, lang)
+    if troll and random.random() < 0.3:
+        await message.reply(troll)
+        return
+
+    # Mention or zing prefix
     is_mentioned = bot.user in message.mentions
     starts_with_zing = message.content.lower().startswith("zing ")
 
     if is_mentioned or starts_with_zing:
         content = message.content.lower()
-        lang = get_guild_language(str(message.guild.id))
 
         if is_banned(str(message.guild.id), str(message.author.id)):
             msg = "You've been muted. Try again next lifetime, champ." if lang == "en" else "Ты в муте. Попробуй в следующей жизни, малой."
             await message.reply(msg)
             return
 
+        if "guess" in content:
+            # Guessing game
+            if "stop" in content:
+                if str(message.guild.id) in guess_game.active_games:
+                    del guess_game.active_games[str(message.guild.id)]
+                    await message.reply("Game cancelled. Coward." if lang == "en" else "Игра отменена. Трус.")
+                else:
+                    await message.reply("There's no active game. Try starting one with `@Zing guess`." if lang == "en" else "Нет активной игры. Начни с `@Zing guess`.")
+            else:
+                members = [m for m in message.guild.members if not m.bot]
+                started, hint = guess_game.start(str(message.guild.id), members)
+                if started:
+                    await message.reply(f"**Guess who I'm thinking of!** 🔍\nHint: {hint}\nType `@Zing is @user` to guess, or `@Zing guess stop` to cancel." if lang == "en" else f"**Угадай кого я загадал!** 🔍\nПодсказка: {hint}\nПиши `@Zing is @user` чтобы угадать, или `@Zing guess stop` чтобы отменить.")
+                else:
+                    await message.reply("A game is already running!" if lang == "en" else "Игра уже идёт!")
+            return
+
+        if "is <@" in content or "is " in content:
+            # Guessing game attempt
+            if str(message.guild.id) in guess_game.active_games:
+                for user in message.mentions:
+                    if user != bot.user:
+                        result, data = guess_game.guess(str(message.guild.id), user.id)
+                        if result == "win":
+                            await message.reply(f"🎉 **YES!** It's {data}! You actually got it. I'm impressed. Slightly.\nThey got roasted in **{guess_game.active_games.get(str(message.guild.id), {}).get('attempts', '?')}** attempts." if lang == "en" else f"🎉 **ДА!** Это {data}! Ты реально угадал. Я слегка впечатлён.\nУгадано за **{guess_game.active_games.get(str(message.guild.id), {}).get('attempts', '?')}** попыток.")
+                        elif result == "lose":
+                            await message.reply(f"Nope. Try again. Attempt #{data}." if lang == "en" else f"Неа. Попробуй ещё. Попытка #{data}.")
+                        elif result == "no_game":
+                            await message.reply("Start a game first with `@Zing guess`." if lang == "en" else "Сначала начни игру с `@Zing guess`.")
+                        return
+
         if "roast" in content:
-            increment_roast(str(message.author.id))
-            roast = get_roast(message.author.display_name, lang)
-            await message.reply(roast)
+            target = None
+            for user in message.mentions:
+                if user != bot.user:
+                    target = user
+                    break
+            if target:
+                increment_roast(str(target.id))
+                roast = get_roast(target.display_name, lang)
+                await message.reply(f"{target.mention} {roast}")
+            else:
+                increment_roast(str(message.author.id))
+                roast = get_roast(message.author.display_name, lang)
+                await message.reply(roast)
 
         elif "skill" in content:
-            rating = get_skill_rating(message.author.display_name, lang)
-            await message.reply(rating)
-
-        elif "rate" in content:
-            if not is_premium_guild(str(message.guild.id)):
-                msg = "Rate? Only premium servers get judged. Tell your admin to buy a clue." if lang == "en" else "Rate? Только премиум-серверы могут быть оценены. Скажи админу чтоб не жлобствовал."
-                await message.reply(msg)
-                return
-            text = content.replace("rate", "").strip()
-            if text and text != f"<@{bot.user.id}>":
-                result = chat_response(message.author.display_name, f"Rate this: {text}", lang)
-            else:
-                result = chat_response(message.author.display_name, f"Rate {message.author.display_name}", lang)
-            await message.reply(result)
+            target = None
+            for user in message.mentions:
+                if user != bot.user:
+                    target = user
+                    break
+            name = target.display_name if target else message.author.display_name
+            rating = get_skill_rating(name, lang)
+            mention = target.mention if target else ""
+            await message.reply(f"{mention} {rating}")
 
         elif "joke" in content:
             joke = get_joke(lang)
@@ -76,54 +162,58 @@ async def on_message(message):
             else:
                 await message.reply(f"Current language: **{lang.upper()}**. Use `Zing language ru` or `Zing language en` to switch.")
 
+        elif "top" in content or "leaderboard" in content:
+            conn = get_db()
+            rows = conn.execute(
+                "SELECT user_id, roast_count FROM users ORDER BY roast_count DESC LIMIT 10"
+            ).fetchall()
+            conn.close()
+            if not rows:
+                await message.reply("No one has been roasted yet. What a shame." if lang == "en" else "Ещё никого не поджарили. Какой позор.")
+            else:
+                desc = "**🔥 Top Roasted**\n" if lang == "en" else "**🔥 Топ зажаренных**\n"
+                for i, row in enumerate(rows, 1):
+                    user = message.guild.get_member(int(row["user_id"]))
+                    name = user.display_name if user else f"Unknown#{row['user_id'][:4]}"
+                    desc += f"{i}. {name} — {row['roast_count']} roasts\n"
+                await message.reply(desc)
+
         elif "help" in content:
-            await message.reply(embed=get_help_embed(lang))
+            help_en = (
+                "**🤘 Zing Commands**\n"
+                "`@Zing roast` — Roast someone 🔥\n"
+                "`@Zing roast @user` — Roast a specific person\n"
+                "`@Zing skill` — Rate your skill\n"
+                "`@Zing joke` — Dark humor\n"
+                "`@Zing guess` — Start guessing game\n"
+                "`@Zing is @user` — Make a guess\n"
+                "`@Zing top` — Roast leaderboard\n"
+                "`@Zing language ru/en` — Switch language\n"
+                "`/language` — Switch language (slash)\n"
+                "`/premium` — Premium status\n"
+                "`/stats` — Bot stats"
+            )
+            help_ru = (
+                "**🤘 Команды Zing**\n"
+                "`@Zing roast` — Поджарить 🔥\n"
+                "`@Zing roast @user` — Поджарить конкретного\n"
+                "`@Zing skill` — Оценить навык\n"
+                "`@Zing joke` — Чёрная юмореска\n"
+                "`@Zing guess` — Начать игру «Угадай кто»\n"
+                "`@Zing is @user` — Сделать предположение\n"
+                "`@Zing top` — Топ зажаренных\n"
+                "`@Zing language ru/en` — Сменить язык\n"
+                "`/language` — Сменить язык (слэш)\n"
+                "`/premium` — Статус премиума\n"
+                "`/stats` — Статистика бота"
+            )
+            await message.reply(help_ru if lang == "ru" else help_en)
 
         else:
-            reply = chat_response(message.author.display_name, content, lang)
+            reply = chat_response(message.author.display_name, message.clean_content, lang)
             await message.reply(reply)
 
     await bot.process_commands(message)
-
-def get_help_embed(lang: str = "en"):
-    if lang == "ru":
-        embed = discord.Embed(
-            title="🤘 Zing — Хулиган-Бот",
-            description="Напиши @Zing и одну из команд:",
-            color=discord.Color.red()
-        )
-        embed.add_field(name="@Zing roast", value="Поджарить кого-то 🔥", inline=False)
-        embed.add_field(name="@Zing skill", value="Узнать какой ты нубяра", inline=False)
-        embed.add_field(name="@Zing rate", value="Я оценю что скажешь (премиум)", inline=False)
-        embed.add_field(name="@Zing joke", value="Чёрная юмореска", inline=False)
-        embed.add_field(name="@Zing help", value="... серьёзно?", inline=False)
-        embed.add_field(name="/language", value="Сменить язык (ru/en)", inline=False)
-        embed.set_footer(text="Премиум: $5/мес — никаких лимитов")
-    else:
-        embed = discord.Embed(
-            title="🤘 Zing — The Hooligan Bot",
-            description="Mention me and say one of these:",
-            color=discord.Color.red()
-        )
-        embed.add_field(name="@Zing roast", value="Get absolutely cooked 🔥", inline=False)
-        embed.add_field(name="@Zing skill", value="Find out how bad you really are", inline=False)
-        embed.add_field(name="@Zing rate", value="I'll judge what you say (premium)", inline=False)
-        embed.add_field(name="@Zing joke", value="Dark humor incoming", inline=False)
-        embed.add_field(name="@Zing help", value="... really?", inline=False)
-        embed.add_field(name="/language", value="Switch language (ru/en)", inline=False)
-        embed.set_footer(text="Premium: $5/mo — unroastable + more commands")
-    return embed
-
-@bot.tree.command(name="premium", description="Check premium status")
-async def premium(interaction: discord.Interaction):
-    if is_premium_guild(str(interaction.guild_id)):
-        await interaction.response.send_message("This server is premium. Fancy.", ephemeral=True)
-    else:
-        await interaction.response.send_message("Free tier, huh? Tell your admin to stop being cheap.", ephemeral=True)
-
-@bot.tree.command(name="stats", description="Show Zing server stats")
-async def stats(interaction: discord.Interaction):
-    await interaction.response.send_message(f"Zing is running on {len(bot.guilds)} servers. All of them regret it.", ephemeral=True)
 
 @bot.tree.command(name="language", description="Switch language / Сменить язык")
 @app_commands.describe(lang="Choose language: en or ru")
@@ -135,6 +225,18 @@ async def language(interaction: discord.Interaction, lang: str):
     set_guild_language(str(interaction.guild_id), lang)
     msg = "Language set to English! Now I roast in English. Boring." if lang == "en" else "Язык переключён на русский! Теперь буду троллить по-нашему 😏"
     await interaction.response.send_message(msg, ephemeral=False)
+
+@bot.tree.command(name="premium", description="Check premium status")
+async def premium(interaction: discord.Interaction):
+    lang = get_guild_language(str(interaction.guild_id))
+    if is_premium_guild(str(interaction.guild_id)):
+        await interaction.response.send_message("This server is premium. Fancy." if lang == "en" else "Этот сервер премиум. Шикарно.", ephemeral=True)
+    else:
+        await interaction.response.send_message("Free tier, huh? Tell your admin to stop being cheap." if lang == "en" else "Фри-тир? Скажи админу чтоб не жлобствовал.", ephemeral=True)
+
+@bot.tree.command(name="stats", description="Show Zing server stats")
+async def stats(interaction: discord.Interaction):
+    await interaction.response.send_message(f"Zing is running on {len(bot.guilds)} servers. All of them regret it.", ephemeral=True)
 
 def run_bot():
     pass
