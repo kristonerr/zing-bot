@@ -3,7 +3,7 @@ from discord import app_commands
 from discord.ext import commands
 from database import init_db, increment_roast, is_banned, is_premium_guild
 from ai_handler import get_roast, get_skill_rating, get_joke, chat_response
-from config import DISCORD_TOKEN, BOT_NAME
+from config import BOT_NAME
 
 intents = discord.Intents.default()
 intents.message_content = True
@@ -93,4 +93,4 @@ async def stats(interaction: discord.Interaction):
     await interaction.response.send_message(f"Zing is running on {len(bot.guilds)} servers. All of them regret it.", ephemeral=True)
 
 def run_bot():
-    bot.run(DISCORD_TOKEN)
+    pass
