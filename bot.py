@@ -13,20 +13,25 @@ intents.message_content = True
 intents.members = True
 
 bot = commands.Bot(
-    command_prefix=commands.when_mentioned_or("zing!"),
+    command_prefix="zing ",
     intents=intents,
     description="Your favorite Discord hooligan 🤘",
 )
 
-_processed = set()
+_seen = set()
 
-def _is_duplicate(msg_id: int) -> bool:
-    if msg_id in _processed:
-        return True
-    _processed.add(msg_id)
-    if len(_processed) > 1000:
-        _processed.clear()
-    return False
+@bot.event
+async def on_message(message):
+    if message.author.bot:
+        return
+    msg_key = (message.channel.id, message.id)
+    if msg_key in _seen:
+        return
+    _seen.add(msg_key)
+    if len(_seen) > 5000:
+        _seen.clear()
+
+    lang = get_guild_language(str(message.guild.id))
 
 PROVOCATIONS_EN = [
     "This server is way too quiet. Someone want to get roasted? 🔥",
@@ -69,16 +74,6 @@ async def on_ready():
     print(f"{BOT_NAME} is online! Servers: {len(bot.guilds)}")
     bot.loop.create_task(provocator_task())
 
-@bot.event
-async def on_message(message):
-    if message.author.bot:
-        return
-
-    if _is_duplicate(message.id):
-        return
-
-    lang = get_guild_language(str(message.guild.id))
-
     # Random reactions (10% chance)
     if should_react_randomly():
         try:
@@ -105,7 +100,6 @@ async def on_message(message):
             return
 
         if "guess" in content:
-            # Guessing game
             if "stop" in content:
                 if str(message.guild.id) in guess_game.active_games:
                     del guess_game.active_games[str(message.guild.id)]
@@ -122,7 +116,6 @@ async def on_message(message):
             return
 
         if "is <@" in content or "is " in content:
-            # Guessing game attempt
             if str(message.guild.id) in guess_game.active_games:
                 for user in message.mentions:
                     if user != bot.user:
@@ -243,8 +236,6 @@ async def on_message(message):
         else:
             reply = chat_response(message.author.display_name, message.clean_content, lang)
             await message.reply(reply)
-
-    await bot.process_commands(message)
 
 @bot.tree.command(name="language", description="Switch language / Сменить язык")
 @app_commands.describe(lang="Choose language: en or ru")
