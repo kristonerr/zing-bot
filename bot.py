@@ -18,6 +18,16 @@ bot = commands.Bot(
     description="Your favorite Discord hooligan 🤘",
 )
 
+_processed = set()
+
+def _is_duplicate(msg_id: int) -> bool:
+    if msg_id in _processed:
+        return True
+    _processed.add(msg_id)
+    if len(_processed) > 1000:
+        _processed.clear()
+    return False
+
 PROVOCATIONS_EN = [
     "This server is way too quiet. Someone want to get roasted? 🔥",
     "I'm bored. Entertain me or I'll start roasting random people.",
@@ -62,6 +72,9 @@ async def on_ready():
 @bot.event
 async def on_message(message):
     if message.author.bot:
+        return
+
+    if _is_duplicate(message.id):
         return
 
     lang = get_guild_language(str(message.guild.id))
