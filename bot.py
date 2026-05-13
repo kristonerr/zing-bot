@@ -66,8 +66,10 @@ async def on_message(message):
 
         guild_id = _user_guilds.get(user_id)
         if not guild_id:
-            await message.channel.send("Hey! Which server are you from? I need to know to help you better.")
-            return
+            lead = get_lead(None, user_id)
+            if lead:
+                guild_id = lead["guild_id"]
+                _user_guilds[user_id] = guild_id
 
         content_lower = message.clean_content.lower()
         if "english" in content_lower or "i speak english" in content_lower:
@@ -91,9 +93,9 @@ async def on_message(message):
         _dm_history[user_id].append({"role": "user", "content": message.clean_content})
         _dm_history[user_id].append({"role": "assistant", "content": reply})
 
-        if count == 1:
+        if guild_id and count == 1:
             update_lead_stage(guild_id, user_id, "chatting", f"Reply: {message.clean_content[:50]}")
-        elif count >= 5:
+        elif guild_id and count >= 5:
             update_lead_stage(guild_id, user_id, "engaged", f"Active conversation ({count} msgs)")
         return
 

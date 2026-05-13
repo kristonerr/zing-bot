@@ -154,10 +154,16 @@ def update_lead_score(guild_id: str, user_id: str, score: str):
 
 def get_lead(guild_id: str, user_id: str):
     conn = get_db()
-    row = conn.execute(
-        "SELECT * FROM leads WHERE guild_id = ? AND user_id = ?",
-        (guild_id, user_id),
-    ).fetchone()
+    if guild_id:
+        row = conn.execute(
+            "SELECT * FROM leads WHERE guild_id = ? AND user_id = ?",
+            (guild_id, user_id),
+        ).fetchone()
+    else:
+        row = conn.execute(
+            "SELECT * FROM leads WHERE user_id = ? ORDER BY updated_at DESC",
+            (user_id,),
+        ).fetchone()
     conn.close()
     return row
 
