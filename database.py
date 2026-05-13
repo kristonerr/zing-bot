@@ -52,10 +52,11 @@ def init_db():
             cur.execute(f"ALTER TABLE leads ADD COLUMN {col}")
         except:
             pass
-    try:
-        cur.execute("ALTER TABLE guilds ADD COLUMN onboard_channel_id TEXT")
-    except:
-        pass
+    for col in ["onboard_channel_id TEXT", "auto_role_id TEXT"]:
+        try:
+            cur.execute(f"ALTER TABLE guilds ADD COLUMN {col}")
+        except:
+            pass
     conn.commit()
     conn.close()
 
@@ -206,6 +207,23 @@ def update_lead_thread(guild_id: str, user_id: str, thread_id: str):
     )
     conn.commit()
     conn.close()
+
+def set_auto_role(guild_id: str, role_id: str):
+    conn = get_db()
+    conn.execute(
+        "UPDATE guilds SET auto_role_id = ? WHERE guild_id = ?",
+        (role_id, guild_id),
+    )
+    conn.commit()
+    conn.close()
+
+def get_auto_role(guild_id: str):
+    conn = get_db()
+    row = conn.execute(
+        "SELECT auto_role_id FROM guilds WHERE guild_id = ?", (guild_id,)
+    ).fetchone()
+    conn.close()
+    return row["auto_role_id"] if row and row["auto_role_id"] else None
 
 def is_banned(guild_id: str, user_id: str) -> bool:
     conn = get_db()

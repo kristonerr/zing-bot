@@ -4,7 +4,7 @@ import sqlite3
 import time
 from discord import app_commands
 from discord.ext import commands
-from database import init_db, is_banned, is_premium_guild, get_guild_language, set_guild_language, add_lead, update_lead_stage, update_lead_interest, update_lead_score, update_lead_thread, get_lead, get_leads, set_onboard_channel, get_onboard_channel
+from database import init_db, is_banned, is_premium_guild, get_guild_language, set_guild_language, add_lead, update_lead_stage, update_lead_interest, update_lead_score, update_lead_thread, get_lead, get_leads, set_onboard_channel, get_onboard_channel, set_auto_role, get_auto_role
 from ai_handler import chat_response, handle_onboarding, get_first_dm
 from config import BOT_NAME
 
@@ -81,6 +81,16 @@ async def on_member_join(member):
                 except Exception as e:
                     print(f"Thread creation failed: {e}")
                     update_lead_stage(str(guild.id), str(member.id), "thread_failed", f"Could not create thread: {e}")
+
+        # Auto-assign role if configured
+        auto_role_id = get_auto_role(str(guild.id))
+        if auto_role_id:
+            try:
+                role = guild.get_role(int(auto_role_id))
+                if role:
+                    await member.add_roles(role, reason="Auto-role on join")
+            except Exception as e:
+                print(f"Auto-role error: {e}")
 
         # Fallback to DM
         try:
@@ -321,6 +331,16 @@ async def setchannel(interaction: discord.Interaction, channel: discord.TextChan
         return
     set_onboard_channel(str(interaction.guild_id), str(channel.id))
     msg = f"Onboarding channel set to {channel.mention}! 🎉" if get_guild_language(str(interaction.guild_id)) == "en" else f"Канал онбординга установлен: {channel.mention}! 🎉"
+    await interaction.response.send_message(msg, ephemeral=False)
+
+@bot.tree.command(name="setrole", description="Auto-assign role to new members (admin only)")
+@app_commands.describe(role="The role to assign when someone joins")
+async def setrole(interaction: discord.Interaction, role: discord.Role):
+    if not interaction.user.guild_permissions.administrator:
+        await interaction.response.send_message("Only admins can use this." if get_guild_language(str(interaction.guild_id)) == "en" else "Только админы могут это использовать.", ephemeral=True)
+        return
+    set_auto_role(str(interaction.guild_id), str(role.id))
+    msg = f"Auto-role set to {role.mention}! New members will get it on join 🎉" if get_guild_language(str(interaction.guild_id)) == "en" else f"Роль установлена: {role.mention}! Новые участники будут получать её при входе 🎉"
     await interaction.response.send_message(msg, ephemeral=False)
 
 @bot.tree.command(name="leads", description="View recent leads (admin only)")
