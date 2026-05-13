@@ -24,6 +24,7 @@ _dm_counts = {}
 _user_guilds = {}  # user_id -> guild_id (last seen guild)
 _dm_history = {}  # user_id -> list of {"role": "user"/"assistant", "content": str}
 _thread_map = {}  # thread_id -> {"guild_id": str, "user_id": str}
+_user_lang = {}  # user_id -> "ru" or "en" (per-user language preference)
 
 @bot.event
 async def on_member_join(member):
@@ -132,10 +133,11 @@ async def on_message(message):
                 _user_guilds[user_id] = guild_id
 
         content_lower = message.clean_content.lower()
-        if "english" in content_lower or "i speak english" in content_lower:
-            lang = "en"
-        else:
-            lang = "ru"
+        if "english" in content_lower or "i speak english" in content_lower or "switch to english" in content_lower:
+            _user_lang[user_id] = "en"
+        elif "русский" in content_lower or "переключи на русский" in content_lower or "по русски" in content_lower:
+            _user_lang[user_id] = "ru"
+        lang = _user_lang.get(user_id, "ru")
 
         if user_id not in _dm_history:
             _dm_history[user_id] = []
@@ -180,7 +182,13 @@ async def on_message(message):
             return
         _cooldowns[user_id] = now
 
-        lang = get_guild_language(guild_id)
+        # Detect per-user language
+        content_lower = message.clean_content.lower()
+        if "english" in content_lower or "i speak english" in content_lower or "switch to english" in content_lower:
+            _user_lang[user_id] = "en"
+        elif "русский" in content_lower or "переключи на русский" in content_lower or "по русски" in content_lower:
+            _user_lang[user_id] = "ru"
+        lang = _user_lang.get(user_id, get_guild_language(guild_id))
         if user_id not in _dm_history:
             _dm_history[user_id] = []
         prev_history = _dm_history[user_id]

@@ -15,7 +15,7 @@ def init_db():
     cur.executescript("""
         CREATE TABLE IF NOT EXISTS guilds (
             guild_id TEXT PRIMARY KEY,
-            language TEXT DEFAULT 'en',
+            language TEXT DEFAULT 'ru',
             premium_until TEXT,
             created_at TEXT DEFAULT (datetime('now'))
         );
@@ -99,7 +99,7 @@ def get_guild_language(guild_id: str) -> str:
     conn.close()
     if row:
         return row["language"]
-    return "en"
+    return "ru"
 
 def set_guild_language(guild_id: str, lang: str):
     conn = get_db()
