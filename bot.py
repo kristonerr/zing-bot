@@ -43,8 +43,9 @@ async def on_member_join(member):
         if onboard_channel_id:
             channel = guild.get_channel(int(onboard_channel_id))
         if not channel:
-            for name in ["onboarding", "welcome", "приветствие", "знакомства", "general", "main"]:
-                channel = discord.utils.get(guild.text_channels, name=name)
+            targets = ["onboarding", "welcome", "приветствие", "знакомства", "general", "main"]
+            for target in targets:
+                channel = discord.utils.find(lambda c: c.name.lower() == target, guild.text_channels)
                 if channel:
                     break
         if not channel:
@@ -53,24 +54,34 @@ async def on_member_join(member):
             channel = next((c for c in guild.text_channels if c.permissions_for(guild.me).create_private_threads), None)
 
         if channel:
-            try:
-                thread_name = f"⚡ hi — {member.display_name}" if lang == "en" else f"⚡ привет — {member.display_name}"
-                thread = await channel.create_private_thread(
-                    name=thread_name[:100],
-                    reason=f"Onboarding for {member.display_name}",
-                )
-                await thread.add_user(member)
-                first_msg = get_first_dm(lang)
-                await thread.send(first_msg)
-                update_lead_thread(str(guild.id), str(member.id), str(thread.id))
-                update_lead_stage(str(guild.id), str(member.id), "greeting", f"Created thread {thread.name}")
-                _thread_map[str(thread.id)] = {"guild_id": str(guild.id), "user_id": str(member.id)}
-                return
-            except Exception as e:
-                print(f"Thread creation failed: {e}")
-                update_lead_stage(str(guild.id), str(member.id), "thread_failed", f"Could not create thread: {e}")
+            perms = channel.permissions_for(guild.me)
+            if not perms.create_private_threads:
+                update_lead_stage(str(guild.id), str(member.id), "no_perms", "Bot needs Create Private Threads permission")
+                print(f"No CREATE_PRIVATE_THREADS in #{channel.name}")
+            elif not perms.send_messages_in_threads:
+                update_lead_stage(str(guild.id), str(member.id), "no_perms", "Bot needs Send Messages In Threads permission")
+                print(f"No SEND_MESSAGES_IN_THREADS in #{channel.name}")
+            else:
+                try:
+                    thread_name = f"⚡ hi — {member.display_name}" if lang == "en" else f"⚡ привет — {member.display_name}"
+                    thread = await channel.create_private_thread(
+                        name=thread_name[:100],
+                        reason=f"Onboarding for {member.display_name}",
+                    )
+                    await thread.add_user(member)
+                    first_msg = get_first_dm(lang)
+                    await thread.send(first_msg)
+                    update_lead_thread(str(guild.id), str(member.id), str(thread.id))
+                    update_lead_stage(str(guild.id), str(member.id), "greeting", f"Created thread {thread.name}")
+                    _thread_map[str(thread.id)] = {"guild_id": str(guild.id), "user_id": str(member.id)}
+                    return
+                except discord.Forbidden:
+                    update_lead_stage(str(guild.id), str(member.id), "thread_forbidden", "Missing permissions for thread")
+                except Exception as e:
+                    print(f"Thread creation failed: {e}")
+                    update_lead_stage(str(guild.id), str(member.id), "thread_failed", f"Could not create thread: {e}")
 
-        # Fallback to DM if thread failed
+        # Fallback to DM
         try:
             first_msg = get_first_dm(lang)
             await member.send(first_msg)
@@ -207,6 +218,22 @@ async def on_message(message):
             add_lead(str(message.guild.id), str(message.author.id), message.author.display_name)
             _user_guilds[str(message.author.id)] = str(message.guild.id)
             await message.reply(f"**Simulating new member join...**\n\n{first_msg}")
+            return
+
+        if "test" in content and "thread" in content:
+            channel = message.channel
+            can_create = channel.permissions_for(message.guild.me).create_private_threads
+            perms_msg = f"Create Private Threads: **{'✅' if can_create else '❌'}**\n" if lang == "en" else f"Создание приватных тредов: **{'✅' if can_create else '❌'}**\n"
+            try:
+                thread = await channel.create_private_thread(
+                    name=f"⚡ test — {message.author.display_name}"[:100],
+                    reason="Thread test",
+                )
+                await thread.add_user(message.author)
+                await thread.send("Thread works! 🎉" if lang == "en" else "Тред работает! 🎉")
+                await message.reply(perms_msg + ("Thread created! Check the thread above ^^" if lang == "en" else "Тред создан! Глянь выше ^^"))
+            except Exception as e:
+                await message.reply(perms_msg + f"Error: {e}")
             return
 
         if "help" in content:
