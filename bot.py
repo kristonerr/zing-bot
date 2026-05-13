@@ -36,6 +36,16 @@ async def on_member_join(member):
         add_lead(str(guild.id), str(member.id), member.display_name)
         _user_guilds[str(member.id)] = str(guild.id)
 
+        # Auto-assign role if configured
+        auto_role_id = get_auto_role(str(guild.id))
+        if auto_role_id:
+            try:
+                role = guild.get_role(int(auto_role_id))
+                if role:
+                    await member.add_roles(role, reason="Auto-role on join")
+            except Exception as e:
+                print(f"Auto-role error: {e}")
+
         # Try private thread first
         thread = None
         onboard_channel_id = get_onboard_channel(str(guild.id))
@@ -81,16 +91,6 @@ async def on_member_join(member):
                 except Exception as e:
                     print(f"Thread creation failed: {e}")
                     update_lead_stage(str(guild.id), str(member.id), "thread_failed", f"Could not create thread: {e}")
-
-        # Auto-assign role if configured
-        auto_role_id = get_auto_role(str(guild.id))
-        if auto_role_id:
-            try:
-                role = guild.get_role(int(auto_role_id))
-                if role:
-                    await member.add_roles(role, reason="Auto-role on join")
-            except Exception as e:
-                print(f"Auto-role error: {e}")
 
         # Fallback to DM
         try:
