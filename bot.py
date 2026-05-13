@@ -336,6 +336,58 @@ async def language(interaction: discord.Interaction, lang: str):
     msg = "Language set to English! 😊" if lang == "en" else "Язык переключён на русский! 😊"
     await interaction.response.send_message(msg, ephemeral=False)
 
+@bot.tree.command(name="setup", description="Auto-configure server for onboarding (admin only)")
+async def setup(interaction: discord.Interaction):
+    if not interaction.user.guild_permissions.administrator:
+        await interaction.response.send_message("Only admins can use this." if get_guild_language(str(interaction.guild_id)) == "en" else "Только админы могут это использовать.", ephemeral=True)
+        return
+
+    await interaction.response.defer(ephemeral=False)
+    guild = interaction.guild
+    me = guild.me
+    lang = get_guild_language(str(guild.id))
+
+    if not me.guild_permissions.manage_roles:
+        await interaction.followup.send("I need **Manage Roles** permission! 🥺" if lang == "en" else "Мне нужно право **Управлять ролями**! 🥺")
+        return
+    if not me.guild_permissions.manage_channels:
+        await interaction.followup.send("I need **Manage Channels** permission! 🥺" if lang == "en" else "Мне нужно право **Управлять каналами**! 🥺")
+        return
+
+    msgs = []
+    role_name = "Newcomer" if lang == "en" else "Новичок"
+    channel_name = "onboarding" if lang == "en" else "знакомства"
+
+    # 1. Create role
+    role = discord.utils.get(guild.roles, name=role_name)
+    if not role:
+        role = await guild.create_role(name=role_name, reason="Zing auto-setup")
+        msgs.append(f"✅ Role **{role_name}** created" if lang == "en" else f"✅ Роль **{role_name}** создана")
+    else:
+        msgs.append(f"✅ Role **{role_name}** already exists" if lang == "en" else f"✅ Роль **{role_name}** уже существует")
+    set_auto_role(str(guild.id), str(role.id))
+
+    # 2. Create channel
+    channel = discord.utils.get(guild.text_channels, name=channel_name)
+    if not channel:
+        overwrites = {
+            guild.default_role: discord.PermissionOverwrite(view_channel=False),
+            role: discord.PermissionOverwrite(view_channel=True, read_message_history=True, send_messages=False),
+            me: discord.PermissionOverwrite(view_channel=True, send_messages=True, read_message_history=True, create_private_threads=True, send_messages_in_threads=True, manage_threads=True),
+        }
+        channel = await guild.create_text_channel(channel_name, overwrites=overwrites, reason="Zing auto-setup")
+        msgs.append(f"✅ Channel **#{channel_name}** created" if lang == "en" else f"✅ Канал **#{channel_name}** создан")
+    else:
+        msgs.append(f"✅ Channel **#{channel_name}** already exists" if lang == "en" else f"✅ Канал **#{channel_name}** уже существует")
+    set_onboard_channel(str(guild.id), str(channel.id))
+
+    # 3. Language
+    set_guild_language(str(guild.id), "ru")
+
+    msg = "\n".join(msgs)
+    msg += "\n\n" + (f"🎉 **Setup complete!** New members will get a private thread in **#{channel_name}**" if lang == "en" else f"🎉 **Настройка завершена!** Новые участники будут получать приватный тред в **#{channel_name}**")
+    await interaction.followup.send(msg)
+
 @bot.tree.command(name="setchannel", description="Set channel for onboarding threads (admin only)")
 @app_commands.describe(channel="The channel where onboarding threads will be created")
 async def setchannel(interaction: discord.Interaction, channel: discord.TextChannel):
