@@ -21,6 +21,7 @@ _cooldowns = {}
 _processed_messages = set()
 _dm_counts = {}
 _user_guilds = {}  # user_id -> guild_id (last seen guild)
+_dm_history = {}  # user_id -> list of {"role": "user"/"assistant", "content": str}
 
 @bot.event
 async def on_member_join(member):
@@ -74,11 +75,21 @@ async def on_message(message):
         else:
             lang = "ru"
 
+        if user_id not in _dm_history:
+            _dm_history[user_id] = []
+        prev_history = _dm_history[user_id]  # only past exchanges, not current msg yet
+        if len(prev_history) > 10:
+            prev_history = prev_history[-10:]
+            _dm_history[user_id] = prev_history
+
         _dm_counts[user_id] = _dm_counts.get(user_id, 0) + 1
         count = _dm_counts[user_id]
 
-        reply = handle_onboarding(message.author.display_name, message.clean_content, lang, count)
+        reply = handle_onboarding(message.author.display_name, message.clean_content, lang, count, prev_history)
         await message.channel.send(reply)
+
+        _dm_history[user_id].append({"role": "user", "content": message.clean_content})
+        _dm_history[user_id].append({"role": "assistant", "content": reply})
 
         if count == 1:
             update_lead_stage(guild_id, user_id, "chatting", f"Reply: {message.clean_content[:50]}")
