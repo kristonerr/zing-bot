@@ -64,8 +64,9 @@ async def on_member_join(member):
             else:
                 try:
                     thread_name = f"⚡ hi — {member.display_name}" if lang == "en" else f"⚡ привет — {member.display_name}"
-                    thread = await channel.create_private_thread(
+                    thread = await channel.create_thread(
                         name=thread_name[:100],
+                        type=discord.ChannelType.private_thread,
                         reason=f"Onboarding for {member.display_name}",
                     )
                     await thread.add_user(member)
@@ -225,8 +226,9 @@ async def on_message(message):
             can_create = channel.permissions_for(message.guild.me).create_private_threads
             perms_msg = f"Create Private Threads: **{'✅' if can_create else '❌'}**\n" if lang == "en" else f"Создание приватных тредов: **{'✅' if can_create else '❌'}**\n"
             try:
-                thread = await channel.create_private_thread(
+                thread = await channel.create_thread(
                     name=f"⚡ test — {message.author.display_name}"[:100],
+                    type=discord.ChannelType.private_thread,
                     reason="Thread test",
                 )
                 await thread.add_user(message.author)
