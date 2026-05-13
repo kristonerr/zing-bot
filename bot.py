@@ -307,7 +307,12 @@ async def on_ready():
         for row in rows:
             if row["thread_id"]:
                 _thread_map[row["thread_id"]] = {"guild_id": row["guild_id"], "user_id": row["user_id"]}
-        await bot.tree.sync()
+        for guild in bot.guilds:
+            try:
+                bot.tree.copy_global_to(guild=discord.Object(id=guild.id))
+                await bot.tree.sync(guild=discord.Object(id=guild.id))
+            except:
+                pass
         print(f"{BOT_NAME} is online! Servers: {len(bot.guilds)}, Threads restored: {len(rows)}")
     except Exception as e:
         print(f"on_ready error: {e}")
@@ -371,5 +376,16 @@ async def premium(interaction: discord.Interaction):
 @bot.tree.command(name="stats", description="Show Zing server stats")
 async def stats(interaction: discord.Interaction):
     await interaction.response.send_message(f"Zing is running on {len(bot.guilds)} servers, helping communities grow! 🚀", ephemeral=True)
+
+@bot.tree.command(name="sync", description="Force sync all commands (admin only)")
+async def sync(interaction: discord.Interaction):
+    if not interaction.user.guild_permissions.administrator:
+        await interaction.response.send_message("Only admins can use this." if get_guild_language(str(interaction.guild_id)) == "en" else "Только админы могут это использовать.", ephemeral=True)
+        return
+    await interaction.response.defer(ephemeral=True)
+    bot.tree.copy_global_to(guild=discord.Object(id=interaction.guild_id))
+    await bot.tree.sync(guild=discord.Object(id=interaction.guild_id))
+    msg = "Commands synced! You may need to restart Discord (Ctrl+R) to see them." if get_guild_language(str(interaction.guild_id)) == "en" else "Команды синхронизированы! Может понадобиться перезапустить Discord (Ctrl+R)."
+    await interaction.followup.send(msg)
 
 
