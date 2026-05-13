@@ -1,9 +1,10 @@
 import discord
 import asyncio
+import sqlite3
 import time
 from discord import app_commands
 from discord.ext import commands
-from database import init_db, is_banned, is_premium_guild, get_guild_language, set_guild_language, add_lead, update_lead_stage, update_lead_interest, update_lead_score, get_lead, get_leads
+from database import init_db, is_banned, is_premium_guild, get_guild_language, set_guild_language, add_lead, update_lead_stage, update_lead_interest, update_lead_score, update_lead_thread, get_lead, get_leads, set_onboard_channel, get_onboard_channel
 from ai_handler import chat_response, handle_onboarding, get_first_dm
 from config import BOT_NAME
 
@@ -22,6 +23,7 @@ _processed_messages = set()
 _dm_counts = {}
 _user_guilds = {}  # user_id -> guild_id (last seen guild)
 _dm_history = {}  # user_id -> list of {"role": "user"/"assistant", "content": str}
+_thread_map = {}  # thread_id -> {"guild_id": str, "user_id": str}
 
 @bot.event
 async def on_member_join(member):
@@ -34,12 +36,48 @@ async def on_member_join(member):
         add_lead(str(guild.id), str(member.id), member.display_name)
         _user_guilds[str(member.id)] = str(guild.id)
 
+        # Try private thread first
+        thread = None
+        onboard_channel_id = get_onboard_channel(str(guild.id))
+        channel = None
+        if onboard_channel_id:
+            channel = guild.get_channel(int(onboard_channel_id))
+        if not channel:
+            for name in ["onboarding", "welcome", "приветствие", "знакомства", "general", "main"]:
+                channel = discord.utils.get(guild.text_channels, name=name)
+                if channel:
+                    break
+        if not channel:
+            channel = guild.system_channel
+        if not channel:
+            channel = next((c for c in guild.text_channels if c.permissions_for(guild.me).create_private_threads), None)
+
+        if channel:
+            try:
+                thread_name = f"⚡ hi — {member.display_name}" if lang == "en" else f"⚡ привет — {member.display_name}"
+                thread = await channel.create_private_thread(
+                    name=thread_name[:100],
+                    reason=f"Onboarding for {member.display_name}",
+                )
+                await thread.add_user(member)
+                first_msg = get_first_dm(lang)
+                await thread.send(first_msg)
+                update_lead_thread(str(guild.id), str(member.id), str(thread.id))
+                update_lead_stage(str(guild.id), str(member.id), "greeting", f"Created thread {thread.name}")
+                _thread_map[str(thread.id)] = {"guild_id": str(guild.id), "user_id": str(member.id)}
+                return
+            except Exception as e:
+                print(f"Thread creation failed: {e}")
+                update_lead_stage(str(guild.id), str(member.id), "thread_failed", f"Could not create thread: {e}")
+
+        # Fallback to DM if thread failed
         try:
             first_msg = get_first_dm(lang)
             await member.send(first_msg)
+            _user_guilds[str(member.id)] = str(guild.id)
             update_lead_stage(str(guild.id), str(member.id), "greeting", f"Sent welcome DM to {member.display_name}")
         except discord.Forbidden:
-            update_lead_stage(str(guild.id), str(member.id), "dm_blocked", f"Could not DM {member.display_name} — DMs closed")
+            update_lead_stage(str(guild.id), str(member.id), "dm_blocked", f"Could not DM {member.display_name}")
         except Exception as e:
             update_lead_stage(str(guild.id), str(member.id), "error", f"DM error: {e}")
     except Exception as e:
@@ -97,6 +135,47 @@ async def on_message(message):
             update_lead_stage(guild_id, user_id, "chatting", f"Reply: {message.clean_content[:50]}")
         elif guild_id and count >= 5:
             update_lead_stage(guild_id, user_id, "engaged", f"Active conversation ({count} msgs)")
+        return
+
+    # Thread onboarding handler (reply in onboarding threads)
+    if isinstance(message.channel, discord.Thread) and message.channel.name.startswith("⚡"):
+        user_id = str(message.author.id)
+        thread_id = str(message.channel.id)
+
+        thread_data = _thread_map.get(thread_id)
+        if not thread_data:
+            lead = get_lead(None, user_id)
+            if lead and lead.get("thread_id") == thread_id:
+                thread_data = {"guild_id": lead["guild_id"], "user_id": lead["user_id"]}
+                _thread_map[thread_id] = thread_data
+        if not thread_data:
+            return
+
+        guild_id = thread_data["guild_id"]
+        _user_guilds[user_id] = guild_id
+        now = time.time()
+        if user_id in _cooldowns and now - _cooldowns[user_id] < 2:
+            return
+        _cooldowns[user_id] = now
+
+        lang = get_guild_language(guild_id)
+        if user_id not in _dm_history:
+            _dm_history[user_id] = []
+        prev_history = _dm_history[user_id]
+        if len(prev_history) > 10:
+            prev_history = prev_history[-10:]
+
+        _dm_counts[user_id] = _dm_counts.get(user_id, 0) + 1
+        count = _dm_counts[user_id]
+
+        reply = handle_onboarding(message.author.display_name, message.clean_content, lang, count, prev_history)
+        await message.channel.send(reply)
+
+        _dm_history[user_id].append({"role": "user", "content": message.clean_content})
+        _dm_history[user_id].append({"role": "assistant", "content": reply})
+
+        if count == 1:
+            update_lead_stage(guild_id, user_id, "chatting", f"Thread reply: {message.clean_content[:50]}")
         return
 
     lang = get_guild_language(str(message.guild.id))
@@ -181,8 +260,16 @@ async def on_message(message):
 async def on_ready():
     try:
         init_db()
+        # Recover thread map from DB after restart
+        conn = sqlite3.connect("zing.db")
+        conn.row_factory = sqlite3.Row
+        rows = conn.execute("SELECT guild_id, user_id, thread_id FROM leads WHERE thread_id IS NOT NULL").fetchall()
+        conn.close()
+        for row in rows:
+            if row["thread_id"]:
+                _thread_map[row["thread_id"]] = {"guild_id": row["guild_id"], "user_id": row["user_id"]}
         await bot.tree.sync()
-        print(f"{BOT_NAME} is online! Servers: {len(bot.guilds)}")
+        print(f"{BOT_NAME} is online! Servers: {len(bot.guilds)}, Threads restored: {len(rows)}")
     except Exception as e:
         print(f"on_ready error: {e}")
 
@@ -195,6 +282,16 @@ async def on_ready():
 async def language(interaction: discord.Interaction, lang: str):
     set_guild_language(str(interaction.guild_id), lang)
     msg = "Language set to English! 😊" if lang == "en" else "Язык переключён на русский! 😊"
+    await interaction.response.send_message(msg, ephemeral=False)
+
+@bot.tree.command(name="setchannel", description="Set channel for onboarding threads (admin only)")
+@app_commands.describe(channel="The channel where onboarding threads will be created")
+async def setchannel(interaction: discord.Interaction, channel: discord.TextChannel):
+    if not interaction.user.guild_permissions.administrator:
+        await interaction.response.send_message("Only admins can use this." if get_guild_language(str(interaction.guild_id)) == "en" else "Только админы могут это использовать.", ephemeral=True)
+        return
+    set_onboard_channel(str(interaction.guild_id), str(channel.id))
+    msg = f"Onboarding channel set to {channel.mention}! 🎉" if get_guild_language(str(interaction.guild_id)) == "en" else f"Канал онбординга установлен: {channel.mention}! 🎉"
     await interaction.response.send_message(msg, ephemeral=False)
 
 @bot.tree.command(name="leads", description="View recent leads (admin only)")

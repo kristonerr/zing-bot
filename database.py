@@ -46,9 +46,14 @@ def init_db():
             updated_at TEXT DEFAULT (datetime('now'))
         );
     """)
-    # Migrate: add score column if missing (for existing databases)
+    # Migrate existing tables
+    for col in ["score TEXT DEFAULT 'new'", "thread_id TEXT"]:
+        try:
+            cur.execute(f"ALTER TABLE leads ADD COLUMN {col}")
+        except:
+            pass
     try:
-        cur.execute("ALTER TABLE leads ADD COLUMN score TEXT DEFAULT 'new'")
+        cur.execute("ALTER TABLE guilds ADD COLUMN onboard_channel_id TEXT")
     except:
         pass
     conn.commit()
@@ -175,6 +180,32 @@ def get_leads(guild_id: str, limit: int = 20):
     ).fetchall()
     conn.close()
     return rows
+
+def set_onboard_channel(guild_id: str, channel_id: str):
+    conn = get_db()
+    conn.execute(
+        "UPDATE guilds SET onboard_channel_id = ? WHERE guild_id = ?",
+        (channel_id, guild_id),
+    )
+    conn.commit()
+    conn.close()
+
+def get_onboard_channel(guild_id: str):
+    conn = get_db()
+    row = conn.execute(
+        "SELECT onboard_channel_id FROM guilds WHERE guild_id = ?", (guild_id,)
+    ).fetchone()
+    conn.close()
+    return row["onboard_channel_id"] if row and row["onboard_channel_id"] else None
+
+def update_lead_thread(guild_id: str, user_id: str, thread_id: str):
+    conn = get_db()
+    conn.execute(
+        "UPDATE leads SET thread_id = ?, updated_at = datetime('now') WHERE guild_id = ? AND user_id = ?",
+        (thread_id, guild_id, user_id),
+    )
+    conn.commit()
+    conn.close()
 
 def is_banned(guild_id: str, user_id: str) -> bool:
     conn = get_db()
