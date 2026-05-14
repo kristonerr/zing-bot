@@ -60,10 +60,10 @@ table tr:hover { background: #1a1a2e; }
 <div class="charts" id="charts"></div>
 <h2 style="margin-bottom:12px;font-size:18px;color:#aaa;">Recent Leads</h2>
 <div style="background:#1a1a2e;border-radius:12px;border:1px solid #2a2a4a;overflow-x:auto;" id="leads-table"></div>
-<div style="margin-top:24px;display:flex;gap:12px;justify-content:center;flex-wrap:wrap;">
-  <button onclick="resetData('today')" style="background:#3a1e1e;border:1px solid #f87171;color:#f87171;padding:10px 24px;border-radius:8px;cursor:pointer;font-size:13px;">Reset Today Stats</button>
-  <button onclick="resetData('full')" style="background:#3a1e1e;border:1px solid #f87171;color:#f87171;padding:10px 24px;border-radius:8px;cursor:pointer;font-size:13px;">Full Reset (all data)</button>
 </div>
+<div style="position:fixed;bottom:20px;right:20px;display:flex;flex-direction:column;gap:8px;">
+  <button onclick="resetData('today')" style="background:#3a1e1e;border:1px solid #f87171;color:#f87171;padding:8px 16px;border-radius:8px;cursor:pointer;font-size:12px;opacity:0.7;" onmouseover="this.style.opacity=1" onmouseout="this.style.opacity=0.7">Reset Today</button>
+  <button onclick="resetData('full')" style="background:#3a1e1e;border:1px solid #f87171;color:#f87171;padding:8px 16px;border-radius:8px;cursor:pointer;font-size:12px;opacity:0.5;" onmouseover="this.style.opacity=1" onmouseout="this.style.opacity=0.5">Full Reset</button>
 </div>
 <script>
 let chart1, chart2, currentRange = '14d';
