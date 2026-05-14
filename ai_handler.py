@@ -1,10 +1,11 @@
 from openai import OpenAI
 from config import AI_API_KEY, AI_BASE_URL, AI_MODEL
+from database import add_usage_log, get_usage_logs
 
 _client = None
 MODEL = AI_MODEL
 
-# Usage tracking
+# Usage tracking (in-memory for real-time today stats)
 usage = {"today": 0, "tokens": 0, "errors": 0, "date": ""}
 from datetime import date as dt_date, datetime
 _usage_log = []
@@ -19,9 +20,13 @@ def track_usage(tokens: int = 0):
     _usage_log.append({"time": datetime.now().isoformat(), "tokens": tokens})
     if len(_usage_log) > 10000:
         _usage_log = _usage_log[-1000:]
+    add_usage_log(tokens=tokens)  # persist to DB
 
-def get_usage_stats():
-    return dict(usage), list(_usage_log[-100:])
+def get_usage_stats(range_days: int = 1):
+    usage_snapshot = dict(usage)
+    logs = get_usage_logs(range_days)
+    usage_snapshot["errors"] += sum(1 for l in logs if l.get("errors", 0))
+    return usage_snapshot, logs
 
 def get_client():
     global _client

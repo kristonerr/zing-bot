@@ -1,6 +1,6 @@
 import sqlite3
 import os
-from datetime import datetime
+from datetime import datetime, timedelta
 
 DB_PATH = os.path.join(os.path.dirname(__file__), "zing.db")
 
@@ -44,6 +44,12 @@ def init_db():
             score TEXT DEFAULT 'new',
             notes TEXT,
             updated_at TEXT DEFAULT (datetime('now'))
+        );
+        CREATE TABLE IF NOT EXISTS usage_logs (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            timestamp TEXT NOT NULL,
+            tokens INTEGER DEFAULT 0,
+            errors INTEGER DEFAULT 0
         );
     """)
     # Migrate existing tables
@@ -227,6 +233,31 @@ def get_auto_role(guild_id: str):
     ).fetchone()
     conn.close()
     return row["auto_role_id"] if row and row["auto_role_id"] else None
+
+def add_usage_log(tokens: int = 0, errors: int = 0):
+    conn = get_db()
+    conn.execute(
+        "INSERT INTO usage_logs (timestamp, tokens, errors) VALUES (datetime('now'), ?, ?)",
+        (tokens, errors),
+    )
+    conn.commit()
+    conn.close()
+
+def get_usage_logs(range_days: int = 1):
+    conn = get_db()
+    since = (datetime.now() - timedelta(days=range_days)).isoformat()
+    rows = conn.execute(
+        "SELECT * FROM usage_logs WHERE timestamp >= ? ORDER BY timestamp ASC",
+        (since,),
+    ).fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
+
+def get_guilds_count() -> int:
+    conn = get_db()
+    row = conn.execute("SELECT COUNT(*) as c FROM guilds").fetchone()
+    conn.close()
+    return row["c"] if row else 0
 
 def is_banned(guild_id: str, user_id: str) -> bool:
     conn = get_db()

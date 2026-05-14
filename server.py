@@ -4,7 +4,7 @@ import sqlite3
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from datetime import date as dt_date
 from ai_handler import get_usage_stats
-from database import DB_PATH
+from database import DB_PATH, get_guilds_count
 
 DASHBOARD_HTML = """<!DOCTYPE html>
 <html lang="ru">
@@ -19,6 +19,10 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; b
 .container { max-width: 1200px; margin: 0 auto; }
 h1 { font-size: 28px; margin-bottom: 8px; color: #fff; }
 .subtitle { color: #888; margin-bottom: 24px; }
+.range-bar { display: flex; gap: 8px; margin-bottom: 20px; flex-wrap: wrap; }
+.range-btn { background: #1a1a2e; border: 1px solid #2a2a4a; color: #aaa; padding: 8px 18px; border-radius: 8px; cursor: pointer; font-size: 13px; transition: all .15s; }
+.range-btn:hover { border-color: #60a5fa; color: #fff; }
+.range-btn.active { background: #60a5fa; color: #fff; border-color: #60a5fa; }
 .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; margin-bottom: 24px; }
 .card { background: #1a1a2e; border-radius: 12px; padding: 20px; border: 1px solid #2a2a4a; }
 .card h3 { font-size: 13px; color: #888; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 8px; }
@@ -46,20 +50,31 @@ table tr:hover { background: #1a1a2e; }
 <div class="container">
 <h1>Zing Dashboard</h1>
 <p class="subtitle" id="subtitle">Loading...</p>
+<div class="range-bar">
+  <button class="range-btn" onclick="setRange('today')">Today</button>
+  <button class="range-btn" onclick="setRange('7d')">7 Days</button>
+  <button class="range-btn active" onclick="setRange('14d')">14 Days</button>
+  <button class="range-btn" onclick="setRange('30d')">30 Days</button>
+</div>
 <div class="cards" id="cards"></div>
 <div class="charts" id="charts"></div>
 <h2 style="margin-bottom:12px;font-size:18px;color:#aaa;">Recent Leads</h2>
 <div style="background:#1a1a2e;border-radius:12px;border:1px solid #2a2a4a;overflow-x:auto;" id="leads-table"></div>
 </div>
 <script>
-let dailyChart, weeklyChart;
+let chart1, chart2, currentRange = '14d';
 async function load() {
-  const r = await fetch('/api/stats');
+  const r = await fetch('/api/stats?range=' + currentRange);
   const d = await r.json();
   document.getElementById('subtitle').textContent = 'Last updated: ' + new Date().toLocaleString();
   renderCards(d);
   renderCharts(d);
   renderLeads(d.leads || []);
+}
+function setRange(r) {
+  currentRange = r;
+  document.querySelectorAll('.range-btn').forEach(b => b.classList.toggle('active', b.textContent.replace(' ','') === ({today:'Today', '7d':'7Days', '14d':'14Days', '30d':'30Days'})[r]));
+  load();
 }
 function renderCards(d) {
   const cards = [
@@ -79,26 +94,29 @@ function renderCharts(d) {
   const hourly = {};
   const daily = {};
   logs.forEach(l => {
-    const h = l.time.slice(11,13); daily[l.time.slice(0,10)] = (daily[l.time.slice(0,10)] || 0) + 1;
-    hourly[h] = (hourly[h] || 0) + 1;
+    if (l.timestamp) {
+      daily[l.timestamp.slice(0,10)] = (daily[l.timestamp.slice(0,10)] || 0) + 1;
+      hourly[l.timestamp.slice(11,13)] = (hourly[l.timestamp.slice(11,13)] || 0) + 1;
+    }
   });
   const hours = Array.from({length:24},(_,i)=>String(i).padStart(2,':00'));
   const hv = hours.map(h => hourly[h.slice(0,2)] || 0);
-  const days = Object.keys(daily).slice(-14);
+  const days = Object.keys(daily);
   const dv = days.map(d => daily[d] || 0);
+  const rangeLabel = {today:'Today', '7d':'7 Days', '14d':'14 Days', '30d':'30 Days'}[currentRange] || 'Period';
 
   document.getElementById('charts').innerHTML =
-    `<div class="chart-box"><h3>Today — Requests by Hour</h3><canvas id="chart-hourly"></canvas></div>` +
-    `<div class="chart-box"><h3>Last 14 Days — Daily Requests</h3><canvas id="chart-daily"></canvas></div>`;
+    '<div class="chart-box"><h3>Requests by Hour — ' + rangeLabel + '</h3><canvas id="chart-hourly"></canvas></div>' +
+    '<div class="chart-box"><h3>Daily Requests — ' + rangeLabel + '</h3><canvas id="chart-daily"></canvas></div>';
 
   setTimeout(() => {
-    if (dailyChart) dailyChart.destroy();
-    if (weeklyChart) weeklyChart.destroy();
-    dailyChart = new Chart(document.getElementById('chart-hourly'), {
+    if (chart1) chart1.destroy();
+    if (chart2) chart2.destroy();
+    chart1 = new Chart(document.getElementById('chart-hourly'), {
       type: 'bar', data: { labels: hours, datasets: [{ label: 'Requests', data: hv, backgroundColor: '#60a5fa', borderRadius: 4 }] },
       options: { responsive: true, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true, grid: { color: '#2a2a4a' } }, x: { grid: { display: false }, ticks: { maxRotation: 0, font: { size: 10 } } } } }
     });
-    weeklyChart = new Chart(document.getElementById('chart-daily'), {
+    chart2 = new Chart(document.getElementById('chart-daily'), {
       type: 'line', data: { labels: days, datasets: [{ label: 'Requests', data: dv, borderColor: '#4ade80', backgroundColor: 'rgba(74,222,128,0.1)', fill: true, tension: 0.3 }] },
       options: { responsive: true, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true, grid: { color: '#2a2a4a' } }, x: { grid: { display: false } } } }
     });
@@ -108,7 +126,7 @@ function renderLeads(leads) {
   if (!leads.length) { document.getElementById('leads-table').innerHTML = '<p style="padding:20px;color:#666;">No leads yet</p>'; return; }
   document.getElementById('leads-table').innerHTML =
     '<table><thead><tr><th>User</th><th>Stage</th><th>Score</th><th>Interest</th><th>Joined</th></tr></thead><tbody>' +
-    leads.map(l => `<tr><td>${l.username || '?'}</td><td><span class="badge ${(l.stage||'new').replace(' ','').toLowerCase()}">${l.stage||'new'}</span></td><td>${l.score || '—'}</td><td>${l.interest || '—'}</td><td>${(l.joined_at||'').slice(0,10)}</td></tr>`).join('') +
+    leads.map(l => '<tr><td>' + (l.username||'?') + '</td><td><span class="badge ' + (l.stage||'new').replace(' ','').toLowerCase() + '">' + (l.stage||'new') + '</span></td><td>' + (l.score||'—') + '</td><td>' + (l.interest||'—') + '</td><td>' + (l.joined_at||'').slice(0,10) + '</td></tr>').join('') +
     '</tbody></table>';
 }
 load();
@@ -121,10 +139,13 @@ class DashboardHandler(BaseHTTPRequestHandler):
     def do_GET(self):
         if self.path == "/" or self.path == "/health":
             self._send_text(200, "text/plain", b"Zing AI Concierge is running!")
-        elif self.path == "/dashboard":
+        elif self.path.startswith("/dashboard"):
             self._send_text(200, "text/html; charset=utf-8", DASHBOARD_HTML.encode("utf-8"))
-        elif self.path == "/api/stats":
-            self._send_json(self._build_stats())
+        elif self.path.startswith("/api/stats"):
+            from urllib.parse import urlparse, parse_qs
+            qs = parse_qs(urlparse(self.path).query)
+            range_days = {"today": 1, "7d": 7, "14d": 14, "30d": 30}.get((qs.get("range") or ["14d"])[0], 1)
+            self._send_json(self._build_stats(range_days))
         else:
             self._send_text(404, "text/plain", b"Not found")
 
@@ -144,15 +165,15 @@ class DashboardHandler(BaseHTTPRequestHandler):
         body = json.dumps(data, ensure_ascii=False, default=str).encode("utf-8")
         self._send_text(200, "application/json; charset=utf-8", body)
 
-    def _build_stats(self):
-        usage, logs = get_usage_stats()
-        stats = {"usage": usage, "logs": logs, "totalLeads": 0, "activeChats": 0, "servers": 0, "leads": []}
+    def _build_stats(self, range_days=14):
+        usage, logs = get_usage_stats(range_days)
+        stats = {"usage": usage, "logs": logs, "totalLeads": 0, "activeChats": 0, "servers": 0, "leads": [], "range": range_days}
         try:
             conn = sqlite3.connect(DB_PATH)
             conn.row_factory = sqlite3.Row
-            today = str(dt_date.today())
             stats["totalLeads"] = conn.execute("SELECT COUNT(*) as c FROM leads").fetchone()["c"]
             stats["activeChats"] = conn.execute("SELECT COUNT(*) as c FROM leads WHERE stage='chatting' OR stage='engaged'").fetchone()["c"]
+            stats["servers"] = get_guilds_count()
             rows = conn.execute("SELECT * FROM leads ORDER BY updated_at DESC LIMIT 20").fetchall()
             stats["leads"] = [dict(r) for r in rows]
             conn.close()

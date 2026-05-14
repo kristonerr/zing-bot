@@ -5,7 +5,7 @@ import time
 from discord import app_commands
 from discord.ext import commands
 from database import init_db, is_banned, is_premium_guild, get_guild_language, set_guild_language, add_lead, update_lead_stage, update_lead_interest, update_lead_score, update_lead_thread, get_lead, get_leads, set_onboard_channel, get_onboard_channel, set_auto_role, get_auto_role
-from ai_handler import chat_response, handle_onboarding, get_first_dm
+from ai_handler import chat_response, handle_onboarding, get_first_dm, _usage_log, usage, track_usage
 from config import BOT_NAME
 
 intents = discord.Intents.default()
@@ -475,5 +475,67 @@ async def sync(interaction: discord.Interaction):
     await bot.tree.sync(guild=discord.Object(id=interaction.guild_id))
     msg = "Commands synced! You may need to restart Discord (Ctrl+R) to see them." if get_guild_language(str(interaction.guild_id)) == "en" else "Команды синхронизированы! Может понадобиться перезапустить Discord (Ctrl+R)."
     await interaction.followup.send(msg)
+
+@bot.tree.command(name="testdata", description="Generate test data for dashboard (admin only)")
+async def testdata(interaction: discord.Interaction):
+    if not interaction.user.guild_permissions.administrator:
+        await interaction.response.send_message("Only admins can use this." if get_guild_language(str(interaction.guild_id)) == "en" else "Только админы могут это использовать.", ephemeral=True)
+        return
+    await interaction.response.defer(ephemeral=True)
+    from datetime import datetime as dt, timedelta
+    import random
+    import sqlite3
+    conn = sqlite3.connect("zing.db")
+    cur = conn.cursor()
+
+    stages = ["greeting", "chatting", "engaged", "qualified", "dm_blocked"]
+    interests = ["Крипта", "IT-сообщество", "Дизайн", "Маркетинг", "Копирайтинг", "Нетворкинг", "Курсы", "Менторство"]
+    names = ["alex_w", "crypto_v", "masha_d", "pavel_t", "kira_s", "igor_m", "tanya_r", "roma_b", "liza_k", "nick_p",
+             "oleg_f", "sveta_l", "dima_g", "anya_z", "kolya_h", "vera_c", "sasha_n", "katya_e", "misha_u", "rita_a"]
+
+    # Clear old test data
+    cur.execute("DELETE FROM usage_logs")
+    conn.commit()
+
+    # Fake usage logs over last 30 days
+    now = dt.now()
+    for days_ago in range(30):
+        day_date = now - timedelta(days=days_ago)
+        daily_count = random.randint(3, 25)
+        for _ in range(daily_count):
+            minutes = random.randint(0, 1439)
+            ts = day_date.replace(hour=minutes//60, minute=minutes%60, second=random.randint(0,59)).isoformat()
+            tokens = random.randint(50, 800)
+            cur.execute("INSERT INTO usage_logs (timestamp, tokens, errors) VALUES (?, ?, 0)", (ts, tokens))
+    conn.commit()
+
+    # Fake leads
+    cur.execute("DELETE FROM leads")
+    for i, name in enumerate(names):
+        days_ago = random.randint(0, 20)
+        stage = random.choice(stages)
+        if i < 5:
+            stage = "greeting"
+        elif i < 12:
+            stage = "chatting"
+        joined = (now - timedelta(days=days_ago)).isoformat()
+        cur.execute(
+            "INSERT INTO leads (guild_id, user_id, username, joined_at, stage, interest, score) VALUES (?, ?, ?, ?, ?, ?, ?)",
+            (str(interaction.guild_id), f"test_user_{i}", name, joined, stage, random.choice(interests), str(random.randint(1, 10))),
+        )
+    conn.commit()
+    conn.close()
+
+    # Seed in-memory usage logs for today
+    today = str(dt_date.today())
+    global _usage_log
+    _usage_log.clear()
+    usage.update({"today": 0, "tokens": 0, "errors": 0, "date": today})
+    log_count = random.randint(5, 15)
+    for _ in range(log_count):
+        tokens = random.randint(50, 500)
+        track_usage(tokens)
+
+    await interaction.followup.send(f"✅ Test data generated! Check the dashboard: https://zing-bot-9piz.onrender.com/dashboard")
 
 
