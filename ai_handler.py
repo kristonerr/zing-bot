@@ -46,6 +46,13 @@ FIRST_DM_RU = (
     "Привет! 👋 Добро пожаловать. Я Zing.\n"
     "Чем могу помочь? Или просто посмотреть зашёл?\n"
     "(Если пишешь а клавиатура на английской раскладке — переключи, а то вместо русского может латиница быть 👀)"
+    "\nДля английского просто скажи: *english* 😊"
+)
+
+FIRST_DM_EN = (
+    "Hey! 👋 Welcome to the server. I'm Zing.\n"
+    "What brings you here? Need help with something?\n"
+    "For Russian, just say: *русский* 😊"
 )
 
 def get_prompt(lang: str):
