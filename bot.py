@@ -347,11 +347,19 @@ async def setup(interaction: discord.Interaction):
     me = guild.me
     lang = get_guild_language(str(guild.id))
 
-    if not me.guild_permissions.manage_roles:
-        await interaction.followup.send("I need **Manage Roles** permission! 🥺" if lang == "en" else "Мне нужно право **Управлять ролями**! 🥺")
-        return
-    if not me.guild_permissions.manage_channels:
-        await interaction.followup.send("I need **Manage Channels** permission! 🥺" if lang == "en" else "Мне нужно право **Управлять каналами**! 🥺")
+    if me.guild_permissions.administrator:
+        pass  # has full access
+    elif not me.guild_permissions.manage_roles or not me.guild_permissions.manage_channels:
+        missing = []
+        if not me.guild_permissions.manage_roles:
+            missing.append("**Manage Roles**" if lang == "en" else "**Управлять ролями**")
+        if not me.guild_permissions.manage_channels:
+            missing.append("**Manage Channels**" if lang == "en" else "**Управлять каналами**")
+        await interaction.followup.send(
+            ("I'm missing these permissions: " + ", ".join(missing) + ". Please give me **Administrator** or these specific rights and try again 🥺")
+            if lang == "en"
+            else ("У меня нет прав: " + ", ".join(missing) + ". Выдай мне **Администратора** или эти права и попробуй снова 🥺")
+        )
         return
 
     msgs = []
@@ -385,7 +393,27 @@ async def setup(interaction: discord.Interaction):
     set_onboard_channel(str(guild.id), str(channel.id))
 
     msg = "\n".join(msgs)
-    msg += "\n\n" + (f"🎉 **Setup complete!** New members will get a private thread in **#{channel_name}**" if lang == "en" else f"🎉 **Настройка завершена!** Новые участники будут получать приватный тред в **#{channel_name}**")
+    instructions_en = (
+        f"\n\n🎉 **Setup complete!** Here's what's ready:\n"
+        f"• Role **{role_name}** — assigned to new members on join\n"
+        f"• Channel **#{channel_name}** — new members see it, bot creates private threads there\n\n"
+        "📋 **Manual steps for you:**\n"
+        "1. Right-click any channel you want to hide → **Edit Channel → Permissions**\n"
+        "2. For **@everyone**, disable ✅ **View Channels**\n"
+        "3. Give access only to roles you trust\n\n"
+        "New members will land in **#{channel_name}**, chat with me there, and stay hidden from the rest 🔐"
+    )
+    instructions_ru = (
+        f"\n\n🎉 **Настройка завершена!** Что готово:\n"
+        f"• Роль **{role_name}** — выдаётся новичкам при входе\n"
+        f"• Канал **#{channel_name}** — новички его видят, бот создаёт приватные треды\n\n"
+        "📋 **Что сделать вручную:**\n"
+        "1. Нажми правой кнопкой на канал, который хочешь скрыть → **Настройки канала → Права**\n"
+        "2. У **@everyone** убери ✅ **Видеть каналы**\n"
+        "3. Выдай доступ только нужным ролям\n\n"
+        "Новички будут попадать в **#{channel_name}**, общаться там со мной, а остальные каналы не видеть 🔐"
+    )
+    msg += (instructions_en if lang == "en" else instructions_ru)
     await interaction.followup.send(msg)
 
 @bot.tree.command(name="setchannel", description="Set channel for onboarding threads (admin only)")
