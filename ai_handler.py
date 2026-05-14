@@ -4,6 +4,25 @@ from config import AI_API_KEY, AI_BASE_URL, AI_MODEL
 _client = None
 MODEL = AI_MODEL
 
+# Usage tracking
+usage = {"today": 0, "tokens": 0, "errors": 0, "date": ""}
+from datetime import date as dt_date, datetime
+_usage_log = []
+
+def track_usage(tokens: int = 0):
+    global usage, _usage_log
+    today = str(dt_date.today())
+    if usage["date"] != today:
+        usage = {"today": 0, "tokens": 0, "errors": 0, "date": today}
+    usage["today"] += 1
+    usage["tokens"] += tokens
+    _usage_log.append({"time": datetime.now().isoformat(), "tokens": tokens})
+    if len(_usage_log) > 10000:
+        _usage_log = _usage_log[-1000:]
+
+def get_usage_stats():
+    return dict(usage), list(_usage_log[-100:])
+
 def get_client():
     global _client
     if _client is None:
@@ -80,13 +99,16 @@ def chat_response(username: str, message: str, lang: str = "en") -> str:
             temperature=0.7,
         )
         text = resp.choices[0].message.content.strip()
+        tokens = resp.usage.total_tokens if hasattr(resp, 'usage') and resp.usage else len(text) // 2
+        track_usage(tokens)
         # Filter out banned phrases
         for bad in ["здравствуйте", "приветствую", "добро пожаловать", "пожалуйста", "не стесняй", "hello there", "welcome", "please don't hesitate"]:
             text = text.replace(bad, "").strip()
         if len(text) < 5:
             text = "Привет! Чем могу помочь?" if lang == "ru" else "Hey! What brings you here?"
         return text
-    except Exception:
+    except Exception as e:
+        usage["errors"] += 1
         return f"Hey {username}, I'm here to help! My AI brain is taking a quick break — try me again in a moment." if lang == "en" else f"Привет, {username}! Мой AI-мозг на паузе — попробуй ещё раз через минуту."
 
 def handle_onboarding(username: str, message: str, lang: str = "en", message_count: int = 1, history: list = None) -> str:
@@ -105,10 +127,13 @@ def handle_onboarding(username: str, message: str, lang: str = "en", message_cou
             temperature=0.8,
         )
         text = resp.choices[0].message.content.strip()
+        tokens = resp.usage.total_tokens if hasattr(resp, 'usage') and resp.usage else len(text) // 2
+        track_usage(tokens)
         for bad in ["здравствуйте", "приветствую", "добро пожаловать", "пожалуйста", "не стесняй", "hello there", "welcome to", "please don't hesitate"]:
             text = text.replace(bad, "").strip()
         if len(text) < 5:
             text = "Привет! Чем могу помочь?" if lang == "ru" else "Hey! What brings you here?"
         return text
     except Exception:
+        usage["errors"] += 1
         return f"That's great, {username}! Tell me more about what you're looking for." if lang == "en" else f"Круто, {username}! Расскажи подробнее, что ты ищешь."
