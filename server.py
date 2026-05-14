@@ -4,7 +4,7 @@ import sqlite3
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from datetime import date as dt_date
 from ai_handler import get_usage_stats
-from database import DB_PATH, get_guilds_count
+from database import DB_PATH, get_guilds_count, reset_data
 
 DASHBOARD_HTML = """<!DOCTYPE html>
 <html lang="ru">
@@ -60,6 +60,10 @@ table tr:hover { background: #1a1a2e; }
 <div class="charts" id="charts"></div>
 <h2 style="margin-bottom:12px;font-size:18px;color:#aaa;">Recent Leads</h2>
 <div style="background:#1a1a2e;border-radius:12px;border:1px solid #2a2a4a;overflow-x:auto;" id="leads-table"></div>
+<div style="margin-top:24px;display:flex;gap:12px;justify-content:center;flex-wrap:wrap;">
+  <button onclick="resetData('today')" style="background:#3a1e1e;border:1px solid #f87171;color:#f87171;padding:10px 24px;border-radius:8px;cursor:pointer;font-size:13px;">Reset Today Stats</button>
+  <button onclick="resetData('full')" style="background:#3a1e1e;border:1px solid #f87171;color:#f87171;padding:10px 24px;border-radius:8px;cursor:pointer;font-size:13px;">Full Reset (all data)</button>
+</div>
 </div>
 <script>
 let chart1, chart2, currentRange = '14d';
@@ -129,6 +133,11 @@ function renderLeads(leads) {
     leads.map(l => '<tr><td>' + (l.username||'?') + '</td><td><span class="badge ' + (l.stage||'new').replace(' ','').toLowerCase() + '">' + (l.stage||'new') + '</span></td><td>' + (l.score||'—') + '</td><td>' + (l.interest||'—') + '</td><td>' + (l.joined_at||'').slice(0,10) + '</td></tr>').join('') +
     '</tbody></table>';
 }
+async function resetData(mode) {
+  if (!confirm(mode === 'full' ? 'Delete ALL data? This cannot be undone!' : 'Reset today\\'s stats?')) return;
+  await fetch('/api/reset', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({mode}) });
+  load();
+}
 load();
 setInterval(load, 30000);
 </script>
@@ -136,6 +145,13 @@ setInterval(load, 30000);
 </html>"""
 
 class DashboardHandler(BaseHTTPRequestHandler):
+    def do_OPTIONS(self):
+        self.send_response(204)
+        self.send_header("Access-Control-Allow-Origin", "*")
+        self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+        self.send_header("Access-Control-Allow-Headers", "Content-Type")
+        self.end_headers()
+
     def do_GET(self):
         if self.path == "/" or self.path == "/health":
             self._send_text(200, "text/plain", b"Zing AI Concierge is running!")
@@ -146,6 +162,24 @@ class DashboardHandler(BaseHTTPRequestHandler):
             qs = parse_qs(urlparse(self.path).query)
             range_days = {"today": 1, "7d": 7, "14d": 14, "30d": 30}.get((qs.get("range") or ["14d"])[0], 1)
             self._send_json(self._build_stats(range_days))
+        else:
+            self._send_text(404, "text/plain", b"Not found")
+
+    def do_POST(self):
+        if self.path == "/api/reset":
+            from ai_handler import usage, _usage_log
+            from datetime import date as dt_date
+            length = int(self.headers.get("Content-Length", 0))
+            body = self.rfile.read(length) if length else b"{}"
+            try:
+                data = json.loads(body)
+            except:
+                data = {}
+            mode = data.get("mode", "today")
+            reset_data(mode)
+            usage.update({"today": 0, "tokens": 0, "errors": 0, "date": str(dt_date.today())})
+            _usage_log.clear()
+            self._send_json({"ok": True, "mode": mode})
         else:
             self._send_text(404, "text/plain", b"Not found")
 

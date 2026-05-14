@@ -1,6 +1,6 @@
 import sqlite3
 import os
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, date
 
 DB_PATH = os.path.join(os.path.dirname(__file__), "zing.db")
 
@@ -258,6 +258,18 @@ def get_guilds_count() -> int:
     row = conn.execute("SELECT COUNT(*) as c FROM guilds").fetchone()
     conn.close()
     return row["c"] if row else 0
+
+def reset_data(mode: str = "today"):
+    conn = get_db()
+    if mode == "full":
+        conn.execute("DELETE FROM leads")
+        conn.execute("DELETE FROM guilds")
+        conn.execute("DELETE FROM usage_logs")
+    else:
+        today = str(date.today())
+        conn.execute("DELETE FROM usage_logs WHERE timestamp >= ?", (today,))
+    conn.commit()
+    conn.close()
 
 def is_banned(guild_id: str, user_id: str) -> bool:
     conn = get_db()
