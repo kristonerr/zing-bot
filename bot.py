@@ -358,6 +358,9 @@ async def setup(interaction: discord.Interaction):
     role_name = "Newcomer" if lang == "en" else "Новичок"
     channel_name = "onboarding" if lang == "en" else "знакомства"
 
+    # Ensure guild row exists
+    set_guild_language(str(guild.id), "ru")
+
     # 1. Create role
     role = discord.utils.get(guild.roles, name=role_name)
     if not role:
@@ -380,9 +383,6 @@ async def setup(interaction: discord.Interaction):
     else:
         msgs.append(f"✅ Channel **#{channel_name}** already exists" if lang == "en" else f"✅ Канал **#{channel_name}** уже существует")
     set_onboard_channel(str(guild.id), str(channel.id))
-
-    # 3. Language
-    set_guild_language(str(guild.id), "ru")
 
     msg = "\n".join(msgs)
     msg += "\n\n" + (f"🎉 **Setup complete!** New members will get a private thread in **#{channel_name}**" if lang == "en" else f"🎉 **Настройка завершена!** Новые участники будут получать приватный тред в **#{channel_name}**")

@@ -75,7 +75,8 @@ def set_premium_guild(guild_id: str, days: int = 30):
     until = datetime.now().isoformat()
     conn = get_db()
     conn.execute(
-        "INSERT OR REPLACE INTO guilds (guild_id, premium_until) VALUES (?, ?)",
+        "INSERT INTO guilds (guild_id, premium_until) VALUES (?, ?) "
+        "ON CONFLICT(guild_id) DO UPDATE SET premium_until = excluded.premium_until",
         (guild_id, until),
     )
     conn.commit()
@@ -185,8 +186,9 @@ def get_leads(guild_id: str, limit: int = 20):
 def set_onboard_channel(guild_id: str, channel_id: str):
     conn = get_db()
     conn.execute(
-        "UPDATE guilds SET onboard_channel_id = ? WHERE guild_id = ?",
-        (channel_id, guild_id),
+        "INSERT INTO guilds (guild_id, onboard_channel_id) VALUES (?, ?) "
+        "ON CONFLICT(guild_id) DO UPDATE SET onboard_channel_id = excluded.onboard_channel_id",
+        (guild_id, channel_id),
     )
     conn.commit()
     conn.close()
@@ -211,8 +213,9 @@ def update_lead_thread(guild_id: str, user_id: str, thread_id: str):
 def set_auto_role(guild_id: str, role_id: str):
     conn = get_db()
     conn.execute(
-        "UPDATE guilds SET auto_role_id = ? WHERE guild_id = ?",
-        (role_id, guild_id),
+        "INSERT INTO guilds (guild_id, auto_role_id) VALUES (?, ?) "
+        "ON CONFLICT(guild_id) DO UPDATE SET auto_role_id = excluded.auto_role_id",
+        (guild_id, role_id),
     )
     conn.commit()
     conn.close()
